@@ -2,12 +2,7 @@
 
 # Analog Inputs
 
-There are 2 analog inputs on the VCU-IO PCB. These are currently soldered with a resistor divider consisting of 10kΩ and 18kΩ resistors. This translates the input:
-$
-V_{out} = V_{in} \frac{18}{10 + 18}
-$
-
-For a 5V input this results in a 3.21V output voltage that can be read by the ADC on the MCU. The MCU is 3.3V and therefore cannot read any voltages higher than this. A 3.3V TVS diode is included on the MCU pin to protect it from ESD. To measure higher voltage levels the ratio of the resistive divider network must be changed.
+There are 2 analog inputs on the VCU-IO PCB. These are currently soldered with a resistor divider consisting of 10kΩ and 18kΩ resistors. This translates the input $V_{out} = V_{in} \frac{18}{10 + 18}$. For a 5V input this results in a 3.21V output voltage that can be read by the ADC on the MCU. The MCU is 3.3V and therefore cannot read any voltages higher than this. A 3.3V TVS diode is included on the MCU pin to protect it from ESD. To measure higher voltage levels the ratio of the resistive divider network must be changed.
 
 **Note:** Applying voltages higher than 3.3V to the MCU inputs will damage it.
 
