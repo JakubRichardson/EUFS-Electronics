@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <Fsm.h>
 #include <FlexCAN_T4.h>
 
@@ -100,6 +101,7 @@ void onEnterTractiveSystemOff() {
   if (LOG_STATE) {
     Serial.println("TS-Off");
   }
+  enableInverter(false);
 }
 
 void duringTractiveSystemOff() {
@@ -133,7 +135,8 @@ void onEnterManualDriving() {
   if (LOG_STATE) {
     Serial.println("Manual Driving");
   }
-  // If one-shot enable then put it here
+  // 1. Send Inverter Enable signal
+  enableInverter(true);
 }
 
 void duringManualDriving() {
@@ -146,8 +149,7 @@ void duringManualDriving() {
   if (pressed) {
     fsm.trigger(R2D_BUTTON_EVENT);
   }
-  // 3. Send Inverter Enable signal
-  enableInverter(true);
+  // 3. Check APPS flags. If implausible or not receiving -> deactivate TS
 }
 
 void setupFSM() {
