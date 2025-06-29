@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PCANExplorerProject Version="6.0" AppVersion="6.8.0" Name="eufs">
+    <Connections AutoReset="0" IgnoreRTRLength="0" ProcessRTR="1">
+        <Connection Name="VCU-CAN1" Bus="1" Enabled="0" Protocol="0" CalcBusLoad="1" SymbolsFileName="eufs_can1.dbc" Connection="Untitled1@pcan_usb"/>
+        <Connection Name="VCU-CAN2" Bus="2" Enabled="0" Protocol="0" CalcBusLoad="1" SymbolsFileName="eufs_can2.dbc" Connection="PCANLight_USB_16@pcan_usb"/>
+        <Connection Name="BMS" Bus="3" Enabled="0" Protocol="0" SymbolsFileName="Orion_CANBUS.dbc" Connection="Untitled1@pcan_usb"/>
+    </Connections>
+    <MessageFilters>
+        <MessageFilter Name="BrakePressure">
+            <MessageFilterItem Enabled="1" Type="2" Bus="0"/>
+        </MessageFilter>
+    </MessageFilters>
+    <Files>
+        <File RelativePath="panels\apps.ipf"/>
+        <File RelativePath="panels\assi.ipf"/>
+        <File RelativePath="panels\braking.ipf"/>
+        <File RelativePath="panels\inverter.ipf"/>
+        <File RelativePath="panels\msp.ipf"/>
+        <File RelativePath="panels\res.ipf"/>
+        <File RelativePath="panels\steering.ipf"/>
+        <File RelativePath="..\candb\eufs_can1.dbc" SelectedIDs="ALL"/>
+        <File RelativePath="..\candb\eufs_can2.dbc" SelectedIDs="ALL"/>
+        <File RelativePath="PedalBoxControlUnit.ipf"/>
+        <File RelativePath="..\candb\Orion_CANBUS.dbc"/>
+        <File RelativePath="bmsms_0.plt"/>
+        <File RelativePath="bmsms_1.plt"/>
+        <File RelativePath="bmsms_2.plt"/>
+        <File RelativePath="bmsms_3.plt"/>
+        <File RelativePath="bms.ipf"/>
+        <File RelativePath="bmsms_temps.ipf"/>
+    </Files>
+</PCANExplorerProject>

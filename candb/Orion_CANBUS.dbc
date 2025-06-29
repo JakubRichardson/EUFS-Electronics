@@ -1,0 +1,180 @@
+VERSION ""
+
+
+NS_ :
+  CM_
+  BA_DEF_
+  BA_
+  VAL_
+  BA_DEF_DEF_
+  SIG_VALTYPE_
+
+BS_:
+
+BU_: Vector__XXX
+
+
+BO_ 1712 MSGID_0X6B0: 8 Vector__XXX
+SG_ Pack_Current : 7|16@0+ (0.1,0) [0|6553.5] "Amps" Vector__XXX
+SG_ Pack_Inst_Voltage : 23|16@0+ (0.1,0) [0|6553.5] "Volts" Vector__XXX
+SG_ Pack_SOC : 39|8@0+ (0.5,0) [0|127.5] "Percent" Vector__XXX
+SG_ Relay_State : 47|16@0+ (1,0) [0|65535] "" Vector__XXX
+SG_ CRC_Checksum : 63|8@0+ (1,1720) [1720|0] "" Vector__XXX
+
+BO_ 1713 MSGID_0X6B1: 8 Vector__XXX
+SG_ Pack_DCL : 0|16@1+ (1,0) [0|65535] "Amps" Vector__XXX
+SG_ Pack_CCL : 23|8@0+ (1,0) [0|255] "Amps" Vector__XXX
+SG_ High_Temperature : 39|8@0+ (1,0) [0|255] "Celsius" Vector__XXX
+SG_ Low_Temperature : 47|8@0+ (1,0) [0|255] "Celsius" Vector__XXX
+SG_ CRC_Checksum : 63|8@0+ (1,1721) [1721|0] "" Vector__XXX
+
+BO_ 2553869184 BMSMS_0_General_Broadcast: 8 Vector__XXX
+SG_ BMSMS_0_General_Broadcast_Mux M : 24|8@1+ (1,0) [0|0] "" Vector__XXX
+SG_ Thermistor_B0_C0_T0_Temp m0 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C0_T1_Temp m1 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C0_T2_Temp m2 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C0_T3_Temp m3 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C0_T4_Temp m4 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C0_T5_Temp m5 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C1_T0_Temp m6 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C1_T1_Temp m7 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C1_T2_Temp m8 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C1_T3_Temp m9 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C1_T4_Temp m10 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C1_T5_Temp m11 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C2_T0_Temp m12 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C2_T1_Temp m13 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C2_T2_Temp m14 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C2_T3_Temp m15 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C2_T4_Temp m16 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B0_C2_T5_Temp m17 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+
+BO_ 2553869185 BMSMS_1_General_Broadcast: 8 Vector__XXX
+SG_ BMSMS_1_General_Broadcast_Mux M : 24|8@1+ (1,0) [0|0] "" Vector__XXX
+SG_ Thermistor_B1_C0_T0_Temp m0 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C0_T1_Temp m1 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C0_T2_Temp m2 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C0_T3_Temp m3 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C0_T4_Temp m4 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C0_T5_Temp m5 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C1_T0_Temp m6 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C1_T1_Temp m7 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C1_T2_Temp m8 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C1_T3_Temp m9 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C1_T4_Temp m10 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C1_T5_Temp m11 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C2_T0_Temp m12 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C2_T1_Temp m13 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C2_T2_Temp m14 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C2_T3_Temp m15 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C2_T4_Temp m16 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B1_C2_T5_Temp m17 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+
+BO_ 2553869186 BMSMS_2_General_Broadcast: 8 Vector__XXX
+SG_ BMSMS_2_General_Broadcast_Mux M : 24|8@1+ (1,0) [0|0] "" Vector__XXX
+SG_ Thermistor_B2_C0_T0_Temp m0 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C0_T1_Temp m1 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C0_T2_Temp m2 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C0_T3_Temp m3 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C0_T4_Temp m4 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C0_T5_Temp m5 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C1_T0_Temp m6 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C1_T1_Temp m7 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C1_T2_Temp m8 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C1_T3_Temp m9 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C1_T4_Temp m10 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C1_T5_Temp m11 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C2_T0_Temp m12 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C2_T1_Temp m13 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C2_T2_Temp m14 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C2_T3_Temp m15 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C2_T4_Temp m16 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B2_C2_T5_Temp m17 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+
+BO_ 2553869187 BMSMS_3_General_Broadcast: 8 Vector__XXX
+SG_ BMSMS_3_General_Broadcast_Mux M : 24|8@1+ (1,0) [0|0] "" Vector__XXX
+SG_ Thermistor_B3_C0_T0_Temp m0 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C0_T1_Temp m1 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C0_T2_Temp m2 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C0_T3_Temp m3 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C0_T4_Temp m4 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C0_T5_Temp m5 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C1_T0_Temp m6 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C1_T1_Temp m7 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C1_T2_Temp m8 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C1_T3_Temp m9 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C1_T4_Temp m10 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C1_T5_Temp m11 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C2_T0_Temp m12 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C2_T1_Temp m13 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C2_T2_Temp m14 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C2_T3_Temp m15 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C2_T4_Temp m16 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ Thermistor_B3_C2_T5_Temp m17 : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+
+BO_ 2553934720 BMSMS_0_BMS_Broadcast: 8 Vector__XXX
+SG_ BMSMS_0_Thermistor_Module_Number : 0|8@1+ (1,0) [0|255] "" Vector__XXX
+SG_ BMSMS_0_Lowest_Thermistor_Value : 8|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ BMSMS_0_Highest_Thermistor_Value : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ BMSMS_0_Average_Thermistor_Value : 24|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ BMSMS_0_Fault : 39|1@1+ (1,0) [0|1] "" Vector__XXX
+SG_ BMSMS_0_Highest_Thermistor_ID : 40|8@1+ (1,0) [0|255] "" Vector__XXX
+SG_ BMSMS_0_Thermistors_Enabled : 32|7@1+ (1,0) [0|127] "" Vector__XXX
+SG_ BMSMS_0_Lowest_Thermistor_ID : 48|8@1+ (1,0) [0|255] "" Vector__XXX
+SG_ BMSMS_0_Checksum : 56|8@1+ (1,0) [0|255] "" Vector__XXX
+
+BO_ 2553934721 BMSMS_1_BMS_Broadcast: 8 Vector__XXX
+SG_ BMSMS_1_Thermistor_Module_Number : 0|8@1+ (1,0) [0|255] "" Vector__XXX
+SG_ BMSMS_1_Lowest_Thermistor_Value : 8|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ BMSMS_1_Highest_Thermistor_Value : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ BMSMS_1_Average_Thermistor_Value : 24|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ BMSMS_1_Fault : 39|1@1+ (1,0) [0|1] "" Vector__XXX
+SG_ BMSMS_1_Highest_Thermistor_ID : 40|8@1+ (1,0) [0|255] "" Vector__XXX
+SG_ BMSMS_1_Thermistors_Enabled : 32|7@1+ (1,0) [0|127] "" Vector__XXX
+SG_ BMSMS_1_Lowest_Thermistor_ID : 48|8@1+ (1,0) [0|255] "" Vector__XXX
+SG_ BMSMS_1_Checksum : 56|8@1+ (1,0) [0|255] "" Vector__XXX
+
+BO_ 2553934722 BMSMS_2_BMS_Broadcast: 8 Vector__XXX
+SG_ BMSMS_2_Thermistor_Module_Number : 0|8@1+ (1,0) [0|255] "" Vector__XXX
+SG_ BMSMS_2_Lowest_Thermistor_Value : 8|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ BMSMS_2_Highest_Thermistor_Value : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ BMSMS_2_Average_Thermistor_Value : 24|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ BMSMS_2_Fault : 39|1@1+ (1,0) [0|1] "" Vector__XXX
+SG_ BMSMS_2_Highest_Thermistor_ID : 40|8@1+ (1,0) [0|255] "" Vector__XXX
+SG_ BMSMS_2_Thermistors_Enabled : 32|7@1+ (1,0) [0|127] "" Vector__XXX
+SG_ BMSMS_2_Lowest_Thermistor_ID : 48|8@1+ (1,0) [0|255] "" Vector__XXX
+SG_ BMSMS_2_Checksum : 56|8@1+ (1,0) [0|255] "" Vector__XXX
+
+BO_ 2553934723 BMSMS_3_BMS_Broadcast: 8 Vector__XXX
+SG_ BMSMS_3_Thermistor_Module_Number : 0|8@1+ (1,0) [0|255] "" Vector__XXX
+SG_ BMSMS_3_Lowest_Thermistor_Value : 8|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ BMSMS_3_Highest_Thermistor_Value : 16|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ BMSMS_3_Average_Thermistor_Value : 24|8@1- (1,0) [-128|127] "C" Vector__XXX
+SG_ BMSMS_3_Fault : 39|1@1+ (1,0) [0|1] "" Vector__XXX
+SG_ BMSMS_3_Highest_Thermistor_ID : 40|8@1+ (1,0) [0|255] "" Vector__XXX
+SG_ BMSMS_3_Thermistors_Enabled : 32|7@1+ (1,0) [0|127] "" Vector__XXX
+SG_ BMSMS_3_Lowest_Thermistor_ID : 48|8@1+ (1,0) [0|255] "" Vector__XXX
+SG_ BMSMS_3_Checksum : 56|8@1+ (1,0) [0|255] "" Vector__XXX
+
+CM_ BO_ 1712 "This ID Transmits at 8 ms.";
+CM_ BO_ 1713 "This ID Transmits at 104 ms.";
+CM_ SG_ 2553934720 BMSMS_0_Checksum "Sum of all bytes + 0x39 + length (8)";
+CM_ SG_ 2553934721 BMSMS_1_Checksum "Sum of all bytes + 0x39 + length (8)";
+CM_ SG_ 2553934722 BMSMS_2_Checksum "Sum of all bytes + 0x39 + length (8)";
+CM_ SG_ 2553934723 BMSMS_3_Checksum "Sum of all bytes + 0x39 + length (8)";
+
+BA_DEF_  "BusType" STRING ;
+BA_DEF_ SG_  "GenSigStartValue" FLOAT -3.4E+038 3.4E+038;
+
+BA_DEF_DEF_  "BusType" "CAN";
+BA_DEF_DEF_  "GenSigStartValue" 0;
+
+BA_ "BusType" "CAN";
+
+BA_ "GenSigStartValue" SG_ 1712 CRC_Checksum 1720;
+BA_ "GenSigStartValue" SG_ 1713 CRC_Checksum 1721;
+
+VAL_ 2553869184 BMSMS_0_General_Broadcast_Mux 0 "Thermistor_B0_C0_T0" 1 "Thermistor_B0_C0_T1" 2 "Thermistor_B0_C0_T2" 3 "Thermistor_B0_C0_T3" 4 "Thermistor_B0_C0_T4" 5 "Thermistor_B0_C0_T5" 6 "Thermistor_B0_C1_T0" 7 "Thermistor_B0_C1_T1" 8 "Thermistor_B0_C1_T2" 9 "Thermistor_B0_C1_T3" 10 "Thermistor_B0_C1_T4" 11 "Thermistor_B0_C1_T5" 12 "Thermistor_B0_C2_T0" 13 "Thermistor_B0_C2_T1" 14 "Thermistor_B0_C2_T2" 15 "Thermistor_B0_C2_T3" 16 "Thermistor_B0_C2_T4" 17 "Thermistor_B0_C2_T5";
+VAL_ 2553869185 BMSMS_1_General_Broadcast_Mux 0 "Thermistor_B1_C0_T0" 1 "Thermistor_B1_C0_T1" 2 "Thermistor_B1_C0_T2" 3 "Thermistor_B1_C0_T3" 4 "Thermistor_B1_C0_T4" 5 "Thermistor_B1_C0_T5" 6 "Thermistor_B1_C1_T0" 7 "Thermistor_B1_C1_T1" 8 "Thermistor_B1_C1_T2" 9 "Thermistor_B1_C1_T3" 10 "Thermistor_B1_C1_T4" 11 "Thermistor_B1_C1_T5" 12 "Thermistor_B1_C2_T0" 13 "Thermistor_B1_C2_T1" 14 "Thermistor_B1_C2_T2" 15 "Thermistor_B1_C2_T3" 16 "Thermistor_B1_C2_T4" 17 "Thermistor_B1_C2_T5";
+VAL_ 2553869186 BMSMS_2_General_Broadcast_Mux 0 "Thermistor_B2_C0_T0" 1 "Thermistor_B2_C0_T1" 2 "Thermistor_B2_C0_T2" 3 "Thermistor_B2_C0_T3" 4 "Thermistor_B2_C0_T4" 5 "Thermistor_B2_C0_T5" 6 "Thermistor_B2_C1_T0" 7 "Thermistor_B2_C1_T1" 8 "Thermistor_B2_C1_T2" 9 "Thermistor_B2_C1_T3" 10 "Thermistor_B2_C1_T4" 11 "Thermistor_B2_C1_T5" 12 "Thermistor_B2_C2_T0" 13 "Thermistor_B2_C2_T1" 14 "Thermistor_B2_C2_T2" 15 "Thermistor_B2_C2_T3" 16 "Thermistor_B2_C2_T4" 17 "Thermistor_B2_C2_T5";
+VAL_ 2553869187 BMSMS_3_General_Broadcast_Mux 0 "Thermistor_B3_C0_T0" 1 "Thermistor_B3_C0_T1" 2 "Thermistor_B3_C0_T2" 3 "Thermistor_B3_C0_T3" 4 "Thermistor_B3_C0_T4" 5 "Thermistor_B3_C0_T5" 6 "Thermistor_B3_C1_T0" 7 "Thermistor_B3_C1_T1" 8 "Thermistor_B3_C1_T2" 9 "Thermistor_B3_C1_T3" 10 "Thermistor_B3_C1_T4" 11 "Thermistor_B3_C1_T5" 12 "Thermistor_B3_C2_T0" 13 "Thermistor_B3_C2_T1" 14 "Thermistor_B3_C2_T2" 15 "Thermistor_B3_C2_T3" 16 "Thermistor_B3_C2_T4" 17 "Thermistor_B3_C2_T5";
