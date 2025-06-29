@@ -10,7 +10,8 @@ bool calibrated = true; // CHANGE TO FALSE TO CALIBRATE, THEN CHANGE TO TRUE AFT
 float bufferFactor = 0.1; //Adjusts the pedal buffer
 
 // Global Variables
-static uint32_t const CAN_ID = 0x41; //CAN ID, 41 in hex, 65 in decimal
+static uint32_t const CAN_ID_TORQUE = 0x201; //For inverter to read toqrue
+static uint32_t const CAN_ID_STATUS = 0x41; //For status messages
 
 const int pressedApps1addr = 0; // EEPROM Addresses For Calibration Variables
 const int pressedApps2addr = 1;
@@ -64,8 +65,8 @@ void setup() {
  
   analogReadResolution(10); //Ten bit ADC
  
-  Serial.begin(9600); //Begin serial bus, infinite loop if error
-  while (!Serial) { }
+  Serial.begin(115200); //Begin serial bus, infinite loop if error
+  //while (!Serial) { }
 
   if (!CAN.begin(CanBitRate::BR_500k)) //Begin CAN bus, send error message and infinite loop if error
   {
@@ -76,7 +77,6 @@ void setup() {
 }
 
 void loop() {
-
     if(calibrated == false){ //Run calibration only once if calibration boolean is false
 
       Serial.println("Release the Acceleration Pedal and Then Press Any Key:");
@@ -200,34 +200,48 @@ void loop() {
   bps1 = ((bps1 - offset) * 1000.0) / 15.38; // bar... subtracts 0.5V sensor offset ---> 1000 mV/V ---> 15.38 mV/bar
   bps2 = ((bps2 - offset) * 1000.0) / 15.38;
 
-  uint8_t msg_data[] = {appsFlag, bps1Flag, bps2Flag, appsOutput, bps1Output, bps2Output, 0, 0};
+  int16_t torqueCommand = (appsOutput / 100.0) * -3000;  // scale 0-100% to 0–3000
+  uint8_t torqueLow  = torqueCommand & 0xFF;        // Lower byte
+  uint8_t torqueHigh = (torqueCommand >> 8) & 0xFF; // Higher byte 
+  
 
-  CanMsg const msg(CanStandardId(CAN_ID), sizeof(msg_data), msg_data);
-
+  uint8_t msg_data_torque[] = {0x90, torqueLow, torqueHigh}; //0x90 for torque mode multiplex on the inverter, if you use 0x31 it will send a speed command.
+  uint8_t msg_data_status[] = {appsFlag, bps1Flag, bps2Flag, bps1Output, bps2Output};
+  CanMsg const msg(CanStandardId(CAN_ID_TORQUE), sizeof(msg_data_torque), msg_data_torque);
+  CanMsg const statusMsg(CanStandardId(CAN_ID_STATUS), sizeof(msg_data_status), msg_data_status);
+    
   // Serial Messages
   Serial.println("Apps Flag:");
   Serial.println(appsFlag);
   Serial.println(" ");
-  Serial.println("BPS1 Flag:");
-  Serial.println(bps1Flag);
-  Serial.println(" ");
-  Serial.println("BPS2 Flag:");
-  Serial.println(bps2Flag);
-  Serial.println(" ");
+//  Serial.println("BPS1 Flag:");
+//  Serial.println(bps1Flag);
+//  Serial.println(" ");
+//  Serial.println("BPS2 Flag:");
+//  Serial.println(bps2Flag);
+//  Serial.println(" ");
   Serial.println("APPS Output Percentage:");
   Serial.println(appsOutput);
   Serial.println(" ");
-  Serial.println("Brake Pressure 1 (bar): ");
-  Serial.println(bps1Output);
+  Serial.println("Torque command:");
+  Serial.println(torqueCommand);
   Serial.println(" ");
-  Serial.println("Brake Pressure 2 (bar): ");
-  Serial.println(bps2Output);
-  Serial.println(" ");
+//  Serial.println("Brake Pressure 1 (bar): ");
+//  Serial.println(bps1Output);
+//  Serial.println(" ");
+//  Serial.println("Brake Pressure 2 (bar): ");
+//  Serial.println(bps2Output);
+//  Serial.println(" ");
 
   /* Transmit the CAN message, capture and display an
    * error core in case of failure.
    */
-  if (int const rc = CAN.write(msg); rc < 0)
+  int const rc = CAN.write(msg);
+  delay(1);
+  int const rc1 = CAN.write(statusMsg);
+
+  
+  if (rc < 0 || rc1 < 0)
   {
     Serial.print  ("CAN.write(...) failed with error code ");
     Serial.println(rc);
@@ -240,3 +254,4 @@ void waitForSerial(){
   }
   Serial.println(Serial.read());
 }
+
