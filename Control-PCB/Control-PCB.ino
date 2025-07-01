@@ -17,8 +17,8 @@ const int emergencySoundPin = 15;
 
 const int brakeLightPin = 9;
 
+// CAN Bus
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> Can0;
-
 const int BAUD_RATE = 500000;
 
 // State definitions implemented as enum: B00000 = OFF, B00001 = READY, B00010 = DRIVING, B00100 = EMERGENCY, B01000 = FINISHED
@@ -48,14 +48,7 @@ long lastHeartBeatTime = 0;
 const int heartRate = 250; // ms
 void heartBeat() {
   if (millis() - lastHeartBeatTime < heartRate) return;
-    
-  // lastHeartBeatTime = millis();
-  // heartBeatValue = !heartBeatValue;
-  // digitalWrite(heartBeatPin, heartBeatValue);
-  // byte data[sizeof(heartBeatValue)] = {heartBeatValue};
-  // CAN.MCP_CAN::sendMsgBuf(HEARTBEAT_CAN_ID, Standard_Frame, 1, data);
-
-  // Can0.send
+  // TODO: Complete
 }
 
 bool ledOn = false;
