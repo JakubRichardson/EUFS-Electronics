@@ -3,6 +3,7 @@
 
 // CAN IDs
 const int stateID = 0x54;
+const int brakeID = 0x55; // TODO: Check this
 
 // Pin definitions
 const int yellowPin1 = 3;
@@ -16,6 +17,7 @@ const int readySoundPin = 14;
 const int emergencySoundPin = 15;
 
 const int brakeLightPin = 9;
+const int brakePressureThreshold = 2; // bar
 
 // CAN Bus
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> Can0;
@@ -144,6 +146,17 @@ void playEmergency() {
 
 void brakeLight() {
   digitalWrite(brakeLightPin, CURRENT_BRAKE_LIGHT_STATE ? HIGH : LOW);
+}
+
+void updateBrakeLight(const CAN_message_t &msg) {
+  if (msg.id == brakeID) {
+    int pressure = msg.buf[0] & 0x02; // Set appropriately
+    if(pressure > brakePressureThreshold) {
+      CURRENT_BRAKE_LIGHT_STATE = true;
+    } else {
+      CURRENT_BRAKE_LIGHT_STATE = false;
+    }
+  }
 }
 
 void updateState(const CAN_message_t &msg) {
