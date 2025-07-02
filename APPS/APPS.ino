@@ -225,6 +225,7 @@ void loop()
 
   uint8_t msg_data_torque[] = {0x90, torqueLow, torqueHigh}; // 0x90 for torque mode multiplex on the inverter, if you use 0x31 it will send a speed command.
   uint8_t msg_data_status[] = {appsFlag, bps1Flag, bps2Flag, bps1Output, bps2Output};
+
   CanMsg const msg(CanStandardId(CAN_ID_TORQUE), sizeof(msg_data_torque), msg_data_torque);
   CanMsg const statusMsg(CanStandardId(CAN_ID_STATUS), sizeof(msg_data_status), msg_data_status);
 

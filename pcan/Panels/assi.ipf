@@ -10,7 +10,7 @@ object Scene1: _Scene
   Color = clWhite
   Index = 0
   ExplicitWidth = 559
-  ExplicitHeight = 319
+  ExplicitHeight = 345
   PixelsPerInch = 96
   TextHeight = 13
   object Label1: _Label
@@ -30,52 +30,6 @@ object Scene1: _Scene
     ShowAccelChar = False
     Transparent = True
     WordWrap = True
-  end
-  object ToggleSwitch1: _ToggleSwitch
-    Left = 146
-    Top = 59
-    Width = 32
-    Height = 56
-    SignalName = 'eufs_can2.VCU2AI_Status.BrakeLight'
-    BevelOuter.BorderSpacing = 1
-    BevelOuter.BevelLine = blNone
-    BevelOuter.BorderWidth = 1
-    BevelOuter.BkColor = clBtnShadow
-    BevelOuter.ColorShadowFrom = clBlack
-    BevelOuter.ColorShadowTo = clBlack
-    BevelOuter.ColorHighLightFrom = clBlack
-    BevelOuter.ColorHighLightTo = clBlack
-    BevelOuter.BorderStyle = 2
-    BevelOuter.SurfaceGrad.Visible = False
-    BevelOuter.SurfaceGrad.Style = gsHorizontal1
-    BevelOuter.GradientStyle = gsHorizontal1
-    BevelOuter.StartColor = 14869218
-    BevelOuter.StopColor = 9408399
-    BtnColorHighlight = clBtnHighlight
-    BtnColorShadow = clBtnShadow
-    BtnColorFace = clBtnFace
-    BtnBevelWidth = 2
-    Orientation = boVertical
-    Mode = mSwitch
-    Font.Charset = DEFAULT_CHARSET
-    Font.Color = clWindowText
-    Font.Height = -11
-    Font.Name = 'Tahoma'
-    Font.Style = []
-    ParentFont = False
-    StatusInt = 0
-    StatusBit = 0
-    GroupIndex = 0
-    Checked = False
-    BinarySignal = True
-    UseSignalCycleTime = False
-    CycleTime = 100
-    IsPaused = False
-    SwapGraphic = False
-    TextOff = 'Off'
-    TextOn = 'On'
-    ColorOn = clLime
-    ColorOff = clSilver
   end
   object Label2: _Label
     Left = 114
@@ -107,7 +61,7 @@ object Scene1: _Scene
     PushValue = '1'
     ReleaseValue = '1'
     UseSignalCycleTime = False
-    CycleTime = 100
+    CycleTime = 0
     IsPaused = False
   end
   object Button2: _Button
@@ -121,7 +75,7 @@ object Scene1: _Scene
     PushValue = '2'
     ReleaseValue = '2'
     UseSignalCycleTime = False
-    CycleTime = 100
+    CycleTime = 0
     IsPaused = False
   end
   object Button3: _Button
@@ -135,7 +89,7 @@ object Scene1: _Scene
     PushValue = '3'
     ReleaseValue = '3'
     UseSignalCycleTime = False
-    CycleTime = 100
+    CycleTime = 0
     IsPaused = False
   end
   object Button4: _Button
@@ -149,7 +103,7 @@ object Scene1: _Scene
     PushValue = '4'
     ReleaseValue = '4'
     UseSignalCycleTime = False
-    CycleTime = 100
+    CycleTime = 0
     IsPaused = False
   end
   object Button5: _Button
@@ -163,7 +117,7 @@ object Scene1: _Scene
     PushValue = '5'
     ReleaseValue = '5'
     UseSignalCycleTime = False
-    CycleTime = 100
+    CycleTime = 0
     IsPaused = False
   end
   object Button6: _Button
@@ -177,7 +131,82 @@ object Scene1: _Scene
     PushValue = '6'
     ReleaseValue = '6'
     UseSignalCycleTime = False
-    CycleTime = 100
+    CycleTime = 0
     IsPaused = False
+  end
+  object VerticalSlider1: _VerticalSlider
+    Left = 110
+    Top = 56
+    Width = 104
+    Height = 210
+    UseSignalCycleTime = False
+    CycleTime = 1000
+    IsPaused = False
+    SignalFeedback = True
+    SignalName = 'eufs_can2.APPS2VCU.Front_Brake_Line_Pressure'
+    ChangeLarge = 100
+    ChangeSmall = 10
+    SignalSettings.DigitalTo = 100000
+    SignalSettings.Name1 = 'Front_Brake_Line_Pressure'
+    SignalSettings.Name2 = 'eufs_can2.APPS2VCU.Front_Brake_Line_Pressure'
+    SignalSettings.ValueFormat = '##0'
+    SignalSettings.ValueTo = 260.000000000000000000
+    SignalSettings.ValueUnit = 'Bar'
+    Value = 196.000000000000000000
+    TabOrder = 6
+    EnableMouseJump = False
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -11
+    Font.Name = 'Tahoma'
+    Font.Style = [fsBold]
+    BevelOuter.BevelLine = blNone
+    BevelOuter.BorderWidth = 1
+    BevelOuter.ColorShadowFrom = clBlack
+    BevelOuter.ColorShadowTo = clBlack
+    BevelOuter.ColorHighLightFrom = clBlack
+    BevelOuter.ColorHighLightTo = clBlack
+    BevelOuter.BorderStyle = 2
+    BevelOuter.SurfaceGrad.ColorFrom = 15790320
+    BevelOuter.SurfaceGrad.ColorTo = 9933713
+    BevelOuter.SurfaceGrad.Visible = True
+    BevelOuter.SurfaceGrad.Style = gsHorizontal1
+    BevelOuter.EnableGradient = True
+    BevelOuter.GradientStyle = gsHorizontal1
+    BevelOuter.StartColor = 15790320
+    BevelOuter.StopColor = 9933713
+    BevelValue.BorderSpacing = 0
+    BevelValue.BevelLine = blNone
+    BevelValue.BorderWidth = 1
+    BevelValue.BkColor = clBlack
+    BevelValue.BorderStyle = 0
+    BevelValue.SurfaceGrad.Visible = False
+    BevelValue.SurfaceGrad.Style = gsHorizontal1
+    BevelValue.GradientStyle = gsHorizontal1
+    BevelValue.StartColor = 14869218
+    BevelValue.StopColor = 9408399
+    FontValue.Charset = DEFAULT_CHARSET
+    FontValue.Color = clLime
+    FontValue.Height = -13
+    FontValue.Name = 'Tahoma'
+    FontValue.Style = []
+    FontScale.Charset = DEFAULT_CHARSET
+    FontScale.Color = clWindowText
+    FontScale.Height = -13
+    FontScale.Name = 'Tahoma'
+    FontScale.Style = []
+    Options = [opBevelOuter, opName1, opUnit, opValue, opScaleText]
+    ScaleSettings.DrawLine = False
+    ScaleSettings.Font.Charset = DEFAULT_CHARSET
+    ScaleSettings.Font.Color = clWindowText
+    ScaleSettings.Font.Height = -13
+    ScaleSettings.Font.Name = 'Tahoma'
+    ScaleSettings.Font.Style = []
+    ScaleSettings.PosLeftTop = False
+    ScaleSettings.Steps = 4
+    ScaleSettings.SubSteps = 5
+    ScaleSettings.ValueFormat = '##0'
+    ScaleSettings.ValueFormatLog = '0e-0'
+    ScaleSettings.DecimalPlaces = 0
   end
 end

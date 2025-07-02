@@ -1,9 +1,12 @@
 #include <Arduino.h>
 #include <FlexCAN_T4.h>
 
+// Log State
+const bool LOG_STATE = true;
+
 // CAN IDs
-const int stateID = 0x54;
-const int brakeID = 0x55; // TODO: Check this
+const int brakeID = 0x41; // APPS-Status
+const int stateID = 0x54; // VCU-Status
 
 // Pin definitions
 const int yellowPin1 = 3;
@@ -150,8 +153,8 @@ void brakeLight() {
 
 void updateBrakeLight(const CAN_message_t &msg) {
   if (msg.id == brakeID) {
-    int pressure = msg.buf[0] & 0x02; // Set appropriately
-    if(pressure > brakePressureThreshold) {
+    uint16_t frontPressure = msg.buf[0] | (msg.buf[1] << 8);
+    if(frontPressure > brakePressureThreshold) {
       CURRENT_BRAKE_LIGHT_STATE = true;
     } else {
       CURRENT_BRAKE_LIGHT_STATE = false;
@@ -161,8 +164,11 @@ void updateBrakeLight(const CAN_message_t &msg) {
 
 void updateState(const CAN_message_t &msg) {
   if (msg.id == stateID) {
-    State NEW_STATE = static_cast<State>(msg.buf[1] & 0x0F);
+    State NEW_STATE = static_cast<State>(msg.buf[0] & 0x0F);
     if (NEW_STATE != CURRENT_STATE) {
+      if (LOG_STATE) {
+        Serial.println(NEW_STATE);
+      }
       CURRENT_STATE = NEW_STATE;
 
       if (CURRENT_STATE == READY) {
@@ -171,8 +177,6 @@ void updateState(const CAN_message_t &msg) {
         emergencyTrigger = true;
       }
     }
-
-    CURRENT_BRAKE_LIGHT_STATE = (msg.buf[0] & 0x02) > 0;
   }
 }
 
@@ -198,28 +202,13 @@ void setup() {
   pinMode(6, OUTPUT); digitalWrite(6, LOW); /* optional tranceiver enable pin */
   Can0.begin();
   Can0.setBaudRate(BAUD_RATE);
-  Can0.setMaxMB(16);
-  Can0.enableFIFO();
-  Can0.enableFIFOInterrupt();
-  Can0.onReceive(updateState);
+  Can0.setMaxMB(2);
+  Can0.enableMBInterrupts(); // enables all mailboxes to be interrupt enabled
+  Can0.setMBFilter(MB0, brakeID);
+  Can0.onReceive(MB0, updateBrakeLight);
+  Can0.setMBFilter(MB1, stateID);
+  Can0.onReceive(MB1, updateState);
   Can0.mailboxStatus();
-
-  // Can0.setMBFilter(MB0, 0x53);
-  // Can0.setMBFilter(MB1, 0x53);
-  // Can0.setMBFilter(MB2, 0x53);
-  // Can0.setMBFilter(MB3, 0x53);
-  // Can0.setMBFilter(MB4, 0x53);
-  // Can0.setMBFilter(MB5, 0x53);
-  // Can0.setMBFilter(MB6, 0x53);
-  // Can0.setMBFilter(MB7, 0x53);
-  // Can0.setMBFilter(MB8, 0x53);
-  // Can0.setMBFilter(MB9, 0x53);
-  // Can0.setMBFilter(MB10, 0x53);
-  // Can0.setMBFilter(MB11, 0x53);
-  // Can0.setMBFilter(MB12, 0x53);
-  // Can0.setMBFilter(MB13, 0x53);
-  // Can0.setMBFilter(MB14, 0x53);
-  // Can0.setMBFilter(MB15, 0x53);
 }
 
 void loop() {
