@@ -27,11 +27,10 @@ BO_ 83 AI2VCU_Steer: 2 Vector__XXX
 SG_ STEER_REQUEST : 0|16@1- (0.01,0) [-327.68|327.67] "rad" Vector__XXX
 
 BO_ 84 VCU2AI_Status: 2 Vector__XXX
-SG_ AS_STATE : 8|4@1+ (1,0) [0|15] "" Vector__XXX
-SG_ HANDSHAKE : 0|1@1+ (1,0) [0|1] "" Vector__XXX
-SG_ AMI_STATE : 12|4@1+ (1,0) [0|15] "" Vector__XXX
-SG_ GO_SIGNAL : 4|1@1+ (1,0) [0|1] "" Vector__XXX
-SG_ BrakeLight : 1|1@1+ (1,0) [0|1] "" Vector__XXX
+SG_ AS_STATE : 0|4@1+ (1,0) [0|15] "" Vector__XXX
+SG_ HANDSHAKE : 8|1@1+ (1,0) [0|1] "" Vector__XXX
+SG_ AMI_STATE : 4|4@1+ (1,0) [0|15] "" Vector__XXX
+SG_ GO_SIGNAL : 9|1@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 85 VCU2AI_Acceleration: 6 Vector__XXX
 SG_ ACCELERATION : 0|16@1- (0.01,0) [-327.68|327.67] "m/s^2" Vector__XXX
@@ -244,28 +243,16 @@ SG_ ADC_Voltage : 0|32@1- (1,0) [-3.4E038|3.4E038] "V" Vector__XXX
 BO_ 61 Axis1_Get_Controller_Error: 8 Vector__XXX
 SG_ Controller_Error : 0|32@1+ (1,0) [0|4294967295] "" Vector__XXX
 
-BO_ 65 APPS2VCU: 4 Vector__XXX
-SG_ Accelerator_Error_Flag : 25|1@1+ (1,0) [0|1] "" Vector__XXX
-SG_ Front_Brake_Line_Error_Flag : 24|1@1+ (1,0) [0|1] "" Vector__XXX
-SG_ Accelerator_Pedal_Position : 16|8@1+ (1,0) [0|255] "%" Vector__XXX
-SG_ Front_Brake_Line_Pressure : 0|16@1- (1,0) [-32768|32767] "Bar" Vector__XXX
-
-BO_ 66 APPS2VCU_Rear_State: 1 Vector__XXX
-SG_ Rear_Brake_Line_Error_Flag : 0|1@1+ (1,0) [0|1] "" Vector__XXX
-
-BO_ 68 APPS2VCU_Front_Readings: 3 Vector__XXX
-
-BO_ 70 APPS2VCU_Rear_Readings: 2 Vector__XXX
-SG_ Rear_Brake_Line_Pressure : 0|16@1- (0.1,0) [0|3276.7] "" Vector__XXX
+BO_ 65 APPS2VCU: 6 Vector__XXX
+SG_ Accelerator_Error_Flag : 42|1@1+ (1,0) [0|1] "" Vector__XXX
+SG_ Front_Brake_Line_Error_Flag : 40|1@1+ (1,0) [0|1] "" Vector__XXX
+SG_ Accelerator_Pedal_Position : 32|8@1+ (1,0) [0|255] "%" Vector__XXX
+SG_ Front_Brake_Line_Pressure : 0|16@1+ (1,0) [0|65535] "Bar" Vector__XXX
+SG_ Rear_Brake_Line_Pressure : 16|16@1+ (1,0) [0|65535] "" Vector__XXX
+SG_ Rear_Brake_Line_Error_Flag : 41|1@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 71 IMU_Readings: 2 Vector__XXX
 SG_ Acceleration : 0|16@1- (0.1,0) [-3276.8|3276.7] "m/s^2" Vector__XXX
-
-BO_ 67 APPS2VCU_Heartbeat: 1 Vector__XXX
-SG_ Heartbeat : 0|1@1+ (1,0) [0|1] "" Vector__XXX
-
-BO_ 69 ASSI2VCU_Heartbeat: 1 Vector__XXX
-SG_ Heartbeat : 0|1@1+ (1,0) [0|1] "" Vector__XXX
 
 CM_ SG_ 81 DIRECTION_REQUEST "Requested vehicle direction";
 CM_ SG_ 81 ESTOP_REQUEST "Shutdown request to VCU";
