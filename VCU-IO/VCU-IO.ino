@@ -1,6 +1,10 @@
 #include <Arduino.h>
-#include <Fsm.h>
 #include <FlexCAN_T4.h>
+#include <Fsm.h>
+
+// TODO - Tests:
+// Check cyclic receive from inverter
+// Check enable/disable works
 
 // Print Debug
 const bool LOG_STATE = true;
@@ -11,9 +15,16 @@ const int BAUD_RATE = 500000;
 
 // APPS Timeout Timer
 const uint32_t APPS_ID = 0x41;    // CAN ID to monitor APPS-Status
-const unsigned long TIMEOUT_MS = 250; // APPS Monitor - Timeout
+const unsigned int BRAKE_THRESHOLD = 6; // bar
+bool brakesEngagedFlag = false;
+const unsigned long TIMEOUT_MS = 100; // APPS Monitor - Timeout
 bool appsGood = false;                // APPS flag
-unsigned long lastMessageTime = 0;    // Timeout timer
+unsigned long lastAppsMessageTime = 0;    // Timeout timer
+
+// CAN Messages
+const uint32_t Inv_rcv = 0x181;
+const uint32_t Inv_snd = 0x201;
+const uint32_t VCU_State = 0x3;
 
 // Pins
 const int CAN_BUS_STBY = 6;
@@ -23,7 +34,7 @@ int DIG_OUT_5V[8] = {0, 1, 2, 3, 4, 5, 7, 8};      // 5V Digital Outputs
 int DIG_OUT_24V[2] = {9, 10};                      // 24V Digital Outputs
 
 // Input signals:
-const int R2D_BUTTON = DIG_INP[1]; // R2D button input pin
+const int R2D_BUTTON = DIG_INP[0]; // R2D button input pin
 const int TSMS = DIG_INP[4];       // TSMS - 24V input
 int buttonState;                   // current button reading
 int lastButtonState = LOW;         // previous button reading
@@ -35,23 +46,33 @@ const unsigned long DEBOUNCE_DELAY = 20; // the debounce time; increase if the o
 
 // Inverter RFE Message
 bool RFE = false;
-const int RFE_ID = 0x01; // TODO
+const int RUN_ID = 0xE8; // TODO
+const int READ_ID = 0x3D;
+const int GO_drive_enable = 0xE3;
+const int RDY = 0xE2;
 
 // Inverter Enable Message
 unsigned long lastEnableSendTime = 0;        // the last time enable was sent to the inverter
 const unsigned long ENABLE_CYCLE_TIME = 100; // time (ms) between sending enable messages
-const int INV_ENBL_ID = 0x02;                // TODO
+const int INV_ENBL_ID = 0x51;                // TODO
+const unsigned int INV_ENBL_MSG = 8;
+const unsigned int INV_DISBL_MSG = 12;
+bool invDriveEnabled = false;
 
-// State definitions implemented as enum: B00000 = OFF, B00001 = READY, B00010 = DRIVING, B00100 = EMERGENCY, B01000 = FINISHED
-typedef enum : uint8_t {
-  OFF = 1,
-  READY = 2,
-  DRIVING = 3,
-  EMERGENCY = 4,
-  FINISHED = 5,
-  MANUAL = 6
-} State;
-State CURRENT_STATE = OFF; // Current state
+unsigned long lastRequestTime = 0;
+const unsigned long REQUEST_CYCLE_TIME = 100;
+bool invReceivingRun = false;
+bool invReceivingEnbl = false;
+
+// State definitions implemented as enum: B000 = OFF, B001 = ACTIVE, B010 = MANUAL, B111 = CORSA
+typedef enum : uint8_t { 
+  TS_OFF = 1,
+  TS_ACTIVE = 2,
+  MANUAL = 3,
+  CORSA = 7
+} VCU_State_Enum;
+
+VCU_State_Enum CURRENT_STATE = TS_OFF;      // Current state
 
 // Events
 #define TS_ACTIVATION_EVENT 0
@@ -59,9 +80,9 @@ State CURRENT_STATE = OFF; // Current state
 #define R2D_BUTTON_EVENT 2
 
 // FSM States
-State stateTractiveSystemOff(&onEnterTractiveSystemOff, NULL, NULL);
-State stateTractiveSystemActive(&onEnterTractiveSystemActive, NULL, NULL);
-State stateManualDriving(&onEnterManualDriving, NULL, NULL);
+State stateTractiveSystemOff(&onEnterTractiveSystemOff, &duringTractiveSystemOff, NULL);
+State stateTractiveSystemActive(&onEnterTractiveSystemActive, &duringTractiveSystemActive, NULL);
+State stateManualDriving(&onEnterManualDriving, &duringManualDriving, NULL);
 Fsm fsm(&stateTractiveSystemOff);
 
 // Current State Heartbeat
@@ -69,11 +90,27 @@ unsigned long lastHeartBeatTime = 0;
 const int heartRate = 100; // ms
 void heartBeat() {
   if (millis() - lastHeartBeatTime < heartRate) return;
-  // TODO: Send CAN message with state
+  lastHeartBeatTime = millis();
+  CAN_message_t msg;
+  msg.id = VCU_State;
+  msg.buf[0] = CURRENT_STATE;
+  msg.len = 1;
+  Can0.write(msg);
+}
+
+void inverterRequest(int request) {
+  // Request RUN flag
+  CAN_message_t msg;
+  msg.id = Inv_snd;
+  msg.buf[0] = READ_ID;
+  msg.buf[1] = request;
+  msg.buf[2] = 0x64; // cyclic at 100ms
+  msg.len = 3;
+  Can0.write(msg);
 }
 
 void checkFlag() {
-  if (millis() - lastMessageTime < TIMEOUT_MS) return;
+  if (millis() - lastAppsMessageTime < TIMEOUT_MS) return;
   appsGood = false;
   if (LOG_STATE) {
     Serial.println("APPS Timeout");
@@ -82,22 +119,32 @@ void checkFlag() {
 
 void appsCallback(const CAN_message_t &msg) {
   if (msg.id == APPS_ID) {
-    lastMessageTime = millis();
-    appsGood = !(msg.buf[0] & 0x00); // TODO: Fix me -> plausible
+    lastAppsMessageTime = millis();
+    appsGood = !(msg.buf[5] & 0x04);
+    unsigned int frontBrakePressure = ((msg.buf[1] << 8) | msg.buf[0]);
+    brakesEngagedFlag = (frontBrakePressure >= BRAKE_THRESHOLD);
   }
 }
 
 void handleReceive(const CAN_message_t &msg) {
-  if (msg.id == RFE_ID) {
-    readRFE(msg);
+  if (msg.id == Inv_rcv) {
+    if(msg.buf[0] == RUN_ID){
+      if (!invReceivingRun) {
+        invReceivingRun = true;
+      }
+      RFE = msg.buf[1] & 0x01;
+    }
+    else if (msg.buf[0] == INV_ENBL_ID){
+      if (!invReceivingEnbl) {
+        invReceivingEnbl = true;
+      }
+      if(msg.buf[1] == INV_ENBL_MSG) {
+        invDriveEnabled = true;
+      } else {
+        invDriveEnabled = false;
+      }
+    }
   }
-}
-
-/**
- * @brief Read the value of RFE from the Inverter
- */
-void readRFE(const CAN_message_t &msg) {
-  // TODO: Complete
 }
 
 /**
@@ -106,9 +153,18 @@ void readRFE(const CAN_message_t &msg) {
  * @param bool enable - send enable/disable
  */
 void enableInverter(bool enable) {
-  if ((millis() - lastEnableSendTime) > ENABLE_CYCLE_TIME) {
+  if ((invDriveEnabled != enable) && ((millis() - lastEnableSendTime) > ENABLE_CYCLE_TIME)) {
     lastEnableSendTime = millis();
-    // TODO: Complete
+    CAN_message_t msg;
+    msg.id = Inv_snd;
+    msg.buf[0] = INV_ENBL_ID;
+    if (enable) {
+      msg.buf[1] = INV_ENBL_MSG;
+    } else {
+      msg.buf[1] = INV_DISBL_MSG;
+    }
+    msg.len = 3;
+    Can0.write(msg);
   }
 }
 
@@ -140,8 +196,7 @@ void onEnterTractiveSystemOff() {
   if (LOG_STATE) {
     Serial.println("TS-Off");
   }
-  CURRENT_STATE = OFF;
-  enableInverter(false);
+  CURRENT_STATE = TS_OFF;
 }
 
 void duringTractiveSystemOff() {
@@ -149,13 +204,15 @@ void duringTractiveSystemOff() {
   if (RFE) {
     fsm.trigger(TS_ACTIVATION_EVENT);
   }
+  // 2. Send Inverter Disable
+  enableInverter(false);
 }
 
 void onEnterTractiveSystemActive() {
   if (LOG_STATE) {
     Serial.println("TS Active");
   }
-  CURRENT_STATE = OFF;
+  CURRENT_STATE = TS_ACTIVE;
 }
 
 void duringTractiveSystemActive() {
@@ -165,7 +222,7 @@ void duringTractiveSystemActive() {
   }
   // 2. Read button. If pressed go to Manual Driving
   bool pressed = buttonPressed();
-  if (pressed) {
+  if (pressed && brakesEngagedFlag) {
     fsm.trigger(R2D_BUTTON_EVENT);
   }
   // 3. Send Inverter Disable
@@ -177,14 +234,14 @@ void onEnterManualDriving() {
     Serial.println("Manual Driving");
   }
   CURRENT_STATE = MANUAL;
-  lastMessageTime = millis();
-  // 1. Send Inverter Enable signal
-  enableInverter(true);
+  lastAppsMessageTime = millis();
 }
 
 void duringManualDriving() {
   // 1. Read RFE. If goes low go to TS-Off
   if (!RFE) {
+    Serial.print("RFE: ");
+    Serial.println(RFE);
     // Don't need to disable Inverter as RFE low.
     // Will need to go back through TS-active state again to enable again
     fsm.trigger(TS_DEACTIVATION_EVENT);
@@ -192,14 +249,19 @@ void duringManualDriving() {
   // 2. Read button. If pressed go to TS-Active
   bool pressed = buttonPressed();
   if (pressed) {
+    Serial.print("Button: ");
+    Serial.println(pressed);
     fsm.trigger(R2D_BUTTON_EVENT);
   }
   // 3. Check APPS flags. If implausible or not receiving -> deactivate drive
-  // TODO: Complete check timeout
   checkFlag(); // Check APPS flag
   if (!appsGood) {
+    Serial.print("appsGood: ");
+    Serial.println(appsGood);
     fsm.trigger(R2D_BUTTON_EVENT);
   }
+  // 4. Send Inverter Enable
+  enableInverter(true);
 }
 
 void setupFSM() {
@@ -244,11 +306,12 @@ void setup() {
   Can0.begin();
   Can0.setBaudRate(BAUD_RATE);
   Can0.setMaxMB(16);
-  Can0.enableFIFO();
-  Can0.enableFIFOInterrupt();
-  Can0.onReceive(handleReceive);
+  Can0.enableMBInterrupts(); // enables all mailboxes to be interrupt enabled
+  Can0.setMBFilter(MB0, APPS_ID);
+  Can0.onReceive(MB0, appsCallback);
+  Can0.setMBFilter(MB1, Inv_rcv);
+  Can0.onReceive(MB1, handleReceive);
   Can0.mailboxStatus();
-  // TODO: add APPS callback using mailbox
 
   // Setup State Machine
   setupFSM();
@@ -257,5 +320,10 @@ void setup() {
 
 void loop() {
   fsm.run_machine();
+  if ((millis() - lastRequestTime) > REQUEST_CYCLE_TIME) {
+    lastRequestTime = millis();
+    if(!invReceivingRun) inverterRequest(RUN_ID);
+    if(!invReceivingEnbl) inverterRequest(INV_ENBL_ID);
+  }
   heartBeat(); // Send status heartbeat
 }
