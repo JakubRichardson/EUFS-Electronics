@@ -2,11 +2,12 @@
 #include <FlexCAN_T4.h>
 
 // Log State
-const bool LOG_STATE = true;
+const bool LOG_STATE = false;
 
 // CAN IDs
-const int brakeID = 0x41; // APPS-Status
-const int stateID = 0x54; // VCU-Status
+const int BRAKE_LIGHT_ID = 0x41; // APPS-Status
+const int EV_STATE_ID = 0x03; // EV-Status
+const int AS_STATE_ID = 0x54; // AI-Status
 
 // Pin definitions
 const int yellowPin1 = 3;
@@ -26,6 +27,15 @@ const int brakePressureThreshold = 2; // bar
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> Can0;
 const int BAUD_RATE = 500000;
 
+// State definitions implemented as enum: B000 = OFF, B001 = ACTIVE, B010 = MANUAL, B111 = CORSA
+typedef enum : uint8_t { 
+  TS_OFF = 1,
+  TS_ACTIVE = 2,
+  MANUAL = 3,
+  CORSA = 7
+} EV_State;
+EV_State CURRENT_EV_STATE = TS_OFF;      // Current state
+
 // State definitions implemented as enum: B00000 = OFF, B00001 = READY, B00010 = DRIVING, B00100 = EMERGENCY, B01000 = FINISHED
 typedef enum : uint8_t { 
   OFF = 1,
@@ -33,10 +43,10 @@ typedef enum : uint8_t {
   DRIVING = 3,
   EMERGENCY = 4,
   FINISHED = 5,
-  MANUAL = 6
-} State;
+  MANUAL_DRIVING = 6
+} AS_State;
+AS_State CURRENT_AS_STATE = OFF;      // Current state
 
-State CURRENT_STATE = OFF;      // Current state
 bool CURRENT_BRAKE_LIGHT_STATE = false;
 
 bool readyTrigger = false;
@@ -152,7 +162,7 @@ void brakeLight() {
 }
 
 void updateBrakeLight(const CAN_message_t &msg) {
-  if (msg.id == brakeID) {
+  if (msg.id == BRAKE_LIGHT_ID) {
     uint16_t frontPressure = msg.buf[0] | (msg.buf[1] << 8);
     if(frontPressure > brakePressureThreshold) {
       CURRENT_BRAKE_LIGHT_STATE = true;
@@ -162,18 +172,34 @@ void updateBrakeLight(const CAN_message_t &msg) {
   }
 }
 
-void updateState(const CAN_message_t &msg) {
-  if (msg.id == stateID) {
-    State NEW_STATE = static_cast<State>(msg.buf[0] & 0x0F);
-    if (NEW_STATE != CURRENT_STATE) {
+void updateEvState(const CAN_message_t &msg) {
+  if (msg.id == EV_STATE_ID) {
+    EV_State NEW_EV_STATE = static_cast<EV_State>(msg.buf[0] & 0x0F);
+    if (NEW_EV_STATE != CURRENT_EV_STATE) {
       if (LOG_STATE) {
-        Serial.println(NEW_STATE);
+        Serial.println(NEW_EV_STATE);
       }
-      CURRENT_STATE = NEW_STATE;
+      CURRENT_EV_STATE = NEW_EV_STATE;
 
-      if (CURRENT_STATE == READY) {
+      if (CURRENT_EV_STATE == MANUAL) {
         readyTrigger = true;
-      } else if (CURRENT_STATE == EMERGENCY) {
+      }
+    }
+  }
+}
+
+void updateAsState(const CAN_message_t &msg) {
+  if (msg.id == AS_STATE_ID) {
+    AS_State NEW_AS_STATE = static_cast<AS_State>(msg.buf[0] & 0x0F);
+    if (NEW_AS_STATE != CURRENT_AS_STATE) {
+      if (LOG_STATE) {
+        Serial.println(NEW_AS_STATE);
+      }
+      CURRENT_AS_STATE = NEW_AS_STATE;
+
+      if (CURRENT_AS_STATE == READY) {
+        readyTrigger = true;
+      } else if (CURRENT_AS_STATE == EMERGENCY) {
         emergencyTrigger = true;
       }
     }
@@ -194,7 +220,8 @@ void setup() {
 
   pinMode(brakeLightPin, OUTPUT);
 
-  CURRENT_STATE = OFF;
+  CURRENT_AS_STATE = OFF;
+  CURRENT_EV_STATE = TS_OFF;
 
   Serial.begin(9600);
 
@@ -202,19 +229,28 @@ void setup() {
   pinMode(6, OUTPUT); digitalWrite(6, LOW); /* optional tranceiver enable pin */
   Can0.begin();
   Can0.setBaudRate(BAUD_RATE);
-  Can0.setMaxMB(2);
+  Can0.setMaxMB(3);
   Can0.enableMBInterrupts(); // enables all mailboxes to be interrupt enabled
-  Can0.setMBFilter(MB0, brakeID);
+  Can0.setMBFilter(MB0, BRAKE_LIGHT_ID);
   Can0.onReceive(MB0, updateBrakeLight);
-  Can0.setMBFilter(MB1, stateID);
-  Can0.onReceive(MB1, updateState);
+  Can0.setMBFilter(MB1, EV_STATE_ID);
+  Can0.onReceive(MB1, updateEvState);
+  Can0.setMBFilter(MB2, AS_STATE_ID);
+  Can0.onReceive(MB2, updateAsState);
   Can0.mailboxStatus();
 }
 
 void loop() {
   heartBeat();
   brakeLight();
-  switch (CURRENT_STATE) {
+  switch (CURRENT_EV_STATE) {
+    case MANUAL:
+      playReady();
+      break;
+    default:
+      resetSound();
+  }
+  switch (CURRENT_AS_STATE) {
     case OFF:
       resetLEDs();
       resetSound();
