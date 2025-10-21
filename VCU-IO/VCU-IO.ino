@@ -87,7 +87,7 @@ Fsm fsm(&stateTractiveSystemOff);
 
 // Current State Heartbeat
 unsigned long lastHeartBeatTime = 0;
-const int heartRate = 100; // ms
+const int heartRate = 10; // ms
 void heartBeat() {
   if (millis() - lastHeartBeatTime < heartRate) return;
   lastHeartBeatTime = millis();

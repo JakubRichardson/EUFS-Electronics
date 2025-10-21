@@ -127,7 +127,7 @@ void playReady() {
     digitalWrite(readySoundPin, LOW);
     return;
   }
-
+  
   digitalWrite(readySoundPin, HIGH);
 }
 
@@ -175,6 +175,10 @@ void updateBrakeLight(const CAN_message_t &msg) {
 void updateEvState(const CAN_message_t &msg) {
   if (msg.id == EV_STATE_ID) {
     EV_State NEW_EV_STATE = static_cast<EV_State>(msg.buf[0] & 0x0F);
+    if(LOG_STATE) {
+      Serial.print("EV_STATE: ");
+      Serial.println(NEW_EV_STATE);
+    }
     if (NEW_EV_STATE != CURRENT_EV_STATE) {
       if (LOG_STATE) {
         Serial.println(NEW_EV_STATE);
