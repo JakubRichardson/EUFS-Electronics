@@ -1,11 +1,11 @@
 ﻿[Root]
 LeftDockPanelSize=324
-RightDockPanelSize=291
+RightDockPanelSize=297
 TopDockPanelSize=183
 BottomDockPanelSize=163
-MDITabIndex=0
+MDITabIndex=2
 MaximizedMDIChildren=1
-WindowCount=9
+WindowCount=10
 ClosedWindowsCount=20
 
 [ConnectionsWindow]
@@ -19,14 +19,14 @@ StructureFloatingWidth=200
 StructureDockingWidth=200
 
 [0]
-Name=Window1_DFAFFAC02F50428E824CB97089CD5F3F
+Name=Window2_DFAFFAC02F50428E824CB97089CD5F3F
 ObjectKind={DFAFFAC0-2F50-428E-824C-B97089CD5F3F}
-FileName=bmsms_temps.ipf
+FileName=panels\braking.ipf
 Visible=1
-Left=26
-Top=26
-Width=1108
-Height=298
+Left=156
+Top=156
+Width=1086
+Height=383
 Style=3
 StructureVisible=0
 StructureLastVisible=0
@@ -35,20 +35,36 @@ StructureFloatingWidth=200
 StructureDockingWidth=200
 
 [1]
+Name=Window1_DFAFFAC02F50428E824CB97089CD5F3F
+ObjectKind={DFAFFAC0-2F50-428E-824C-B97089CD5F3F}
+FileName=panels\assi.ipf
+Visible=1
+Left=52
+Top=52
+Width=1112
+Height=298
+Style=3
+StructureVisible=0
+StructureLastVisible=0
+StructureDocked=0
+StructureFloatingWidth=200
+StructureDockingWidth=200
+
+[2]
 Name=Window1_RcvXmtForm
 ObjectKind={3F159EA3-60F6-46C7-9062-93F1E6750139}
 Visible=1
 Left=-8
 Top=0
-Width=1196
+Width=1250
 Height=515
 Style=3
-RcvSize=460
+RcvSize=768
 SplitState=1
 HexViewSize=67
 HexViewVisible=0
 
-[2]
+[3]
 Name=Window1_OutputWindow
 ObjectKind={4842AE28-C870-4465-8195-8E0BC9B5DC5A}
 Visible=0
@@ -60,7 +76,7 @@ Style=2
 TabIndex=0
 SplitPos=153
 
-[3]
+[4]
 Name=Window1_WatchWindow
 ObjectKind={EA49F784-6A32-4CFE-A009-A286A8DED2FD}
 Visible=0
@@ -71,7 +87,7 @@ FloatHeight=200
 Style=2
 TabIndex=0
 
-[4]
+[5]
 Name=Window1_ConnectionsWindow
 ObjectKind={FB44BF1E-7C70-4F04-A5B5-A476C4006598}
 Visible=1
@@ -86,13 +102,13 @@ FloatHeight=143
 Style=2
 DockedTo=BottomDockPanel
 
-[5]
+[6]
 Name=Window1_ProjectManager
 ObjectKind={48F7B7FB-3CE6-4A06-9310-444871C3B477}
 Visible=1
 Left=0
 Top=20
-Width=291
+Width=297
 Height=545
 FloatLeft=78
 FloatTop=78
@@ -104,7 +120,7 @@ TabIndex=0
 ExpandedFolders=
 ExpandedItems=
 
-[6]
+[7]
 Name=Window1_PropertiesWindow
 ObjectKind={7A8A32C4-B718-40D6-9B8B-688F6DEF3068}
 Visible=0
@@ -116,7 +132,7 @@ Style=2
 RowHeaderWidth=523
 HelpPanelHeight=56
 
-[7]
+[8]
 Name=Window1_TimingWindow
 ObjectKind={27B1E93E-3A39-46E0-9BA8-4B40071A7BF5}
 Visible=0
@@ -126,7 +142,7 @@ FloatWidth=592
 FloatHeight=183
 Style=2
 
-[8]
+[9]
 Name=Window1_LibraryBrowser
 ObjectKind={0EFDD5ED-3FFB-4FEC-AA56-927B865C3B3A}
 Visible=0
@@ -137,79 +153,27 @@ FloatHeight=366
 Style=2
 
 [Closed0]
-Ident=test.ipf
-Left=78
-Top=78
-Width=1152
-Height=281
-StructureVisible=0
-StructureLastVisible=0
-StructureDocked=0
-StructureFloatingWidth=200
-StructureDockingWidth=200
-
-[Closed1]
-Ident=bmsms.plt
-Left=130
-Top=130
-Width=986
-Height=272
-
-[Closed2]
-Ident=BMSMS.plw
-Left=52
-Top=52
-Width=1152
-Height=282
-
-[Closed3]
-Ident=Plot6
-Left=78
-Top=78
-Width=1108
-Height=272
-
-[Closed4]
-Ident=Line Writer2
-Left=104
-Top=104
-Width=1108
-Height=272
-
-[Closed5]
-Ident=PedalBoxControlUnit.ipf
-Left=0
-Top=0
-Width=1110
-Height=297
-StructureVisible=0
-StructureLastVisible=0
-StructureDocked=0
-StructureFloatingWidth=200
-StructureDockingWidth=200
-
-[Closed6]
 Ident=..\candb\eufs_can1.dbc
 Left=104
 Top=104
 Width=1110
 Height=306
 
-[Closed7]
+[Closed1]
 Ident=..\candb\eufs_can2.dbc
 Left=78
 Top=78
 Width=1110
 Height=298
 
-[Closed8]
+[Closed2]
 Ident=..\candb\Orion_CANBUS.dbc
 Left=104
 Top=104
 Width=1144
 Height=272
 
-[Closed9]
+[Closed3]
 Ident=RcvXmt
 Left=-8
 Top=0
@@ -220,47 +184,35 @@ SplitState=2
 HexViewSize=67
 HexViewVisible=0
 
-[Closed10]
+[Closed4]
 Ident=bmsms_3.plt
 Left=-8
 Top=0
 Width=1002
 Height=272
 
-[Closed11]
+[Closed5]
 Ident=bmsms_0.plt
 Left=78
 Top=78
 Width=986
 Height=272
 
-[Closed12]
+[Closed6]
 Ident=bmsms_2.plt
 Left=130
 Top=130
 Width=994
 Height=280
 
-[Closed13]
+[Closed7]
 Ident=bmsms_1.plt
 Left=104
 Top=104
 Width=986
 Height=272
 
-[Closed14]
-Ident=bmsms_temps.ipf
-Left=26
-Top=26
-Width=1108
-Height=298
-StructureVisible=0
-StructureLastVisible=0
-StructureDocked=0
-StructureFloatingWidth=200
-StructureDockingWidth=200
-
-[Closed15]
+[Closed8]
 Ident=panels\steering.ipf
 Left=130
 Top=130
@@ -272,7 +224,7 @@ StructureDocked=0
 StructureFloatingWidth=200
 StructureDockingWidth=200
 
-[Closed16]
+[Closed9]
 Ident=panels\inverter.ipf
 Left=78
 Top=78
@@ -284,7 +236,7 @@ StructureDocked=0
 StructureFloatingWidth=200
 StructureDockingWidth=200
 
-[Closed17]
+[Closed10]
 Ident=bms.ipf
 Left=52
 Top=52
@@ -296,7 +248,7 @@ StructureDocked=0
 StructureFloatingWidth=200
 StructureDockingWidth=200
 
-[Closed18]
+[Closed11]
 Ident=panels\assi.ipf
 Left=52
 Top=52
@@ -308,7 +260,35 @@ StructureDocked=0
 StructureFloatingWidth=200
 StructureDockingWidth=200
 
-[Closed19]
+[Closed12]
+Ident=bmsms_temps.ipf
+Left=26
+Top=26
+Width=1108
+Height=298
+StructureVisible=0
+StructureLastVisible=0
+StructureDocked=0
+StructureFloatingWidth=200
+StructureDockingWidth=200
+
+[Closed13]
+Ident=_temp\2026-03-16_18-03-30_928.trc
+Left=78
+Top=78
+Width=1078
+Height=375
+HexViewSize=60
+
+[Closed14]
+Ident=_temp\2026-03-16_14-18-36_858.trc
+Left=78
+Top=78
+Width=1078
+Height=375
+HexViewSize=60
+
+[Closed15]
 Ident=panels\apps.ipf
 Left=26
 Top=12
@@ -319,6 +299,37 @@ StructureLastVisible=0
 StructureDocked=0
 StructureFloatingWidth=200
 StructureDockingWidth=200
+
+[Closed16]
+Ident=Plot1
+Left=26
+Top=26
+Width=1078
+Height=375
+
+[Closed17]
+Ident=_temp\2026-03-16_14-18-58_180.trc
+Left=104
+Top=104
+Width=1078
+Height=375
+HexViewSize=60
+
+[Closed18]
+Ident=_temp\2026-03-16_18-09-09_703.trc
+Left=52
+Top=52
+Width=1078
+Height=375
+HexViewSize=60
+
+[Closed19]
+Ident=_temp\2026-03-16_18-10-38_163.trc
+Left=78
+Top=78
+Width=1086
+Height=375
+HexViewSize=60
 
 [WatchWindow]
 Columns=nvm

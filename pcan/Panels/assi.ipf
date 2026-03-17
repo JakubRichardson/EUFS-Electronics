@@ -57,7 +57,7 @@ object Scene1: _Scene
     Height = 23
     Caption = 'AS Off'
     TabOrder = 0
-    SignalName = 'eufs_can2.VCU2AI_Status.AS_STATE'
+    SignalName = 'eufs_can1.VCU2AI_status.AS_STATE'
     PushValue = '1'
     ReleaseValue = '1'
     UseSignalCycleTime = False
@@ -71,7 +71,7 @@ object Scene1: _Scene
     Height = 23
     Caption = 'AS Ready'
     TabOrder = 1
-    SignalName = 'eufs_can2.VCU2AI_Status.AS_STATE'
+    SignalName = 'eufs_can1.VCU2AI_status.AS_STATE'
     PushValue = '2'
     ReleaseValue = '2'
     UseSignalCycleTime = False
@@ -85,7 +85,7 @@ object Scene1: _Scene
     Height = 23
     Caption = 'AS Driving'
     TabOrder = 2
-    SignalName = 'eufs_can2.VCU2AI_Status.AS_STATE'
+    SignalName = 'eufs_can1.VCU2AI_status.AS_STATE'
     PushValue = '3'
     ReleaseValue = '3'
     UseSignalCycleTime = False
@@ -99,7 +99,7 @@ object Scene1: _Scene
     Height = 23
     Caption = 'AS Emergency'
     TabOrder = 3
-    SignalName = 'eufs_can2.VCU2AI_Status.AS_STATE'
+    SignalName = 'eufs_can1.VCU2AI_status.AS_STATE'
     PushValue = '4'
     ReleaseValue = '4'
     UseSignalCycleTime = False
@@ -113,7 +113,7 @@ object Scene1: _Scene
     Height = 23
     Caption = 'AS Finished'
     TabOrder = 4
-    SignalName = 'eufs_can2.VCU2AI_Status.AS_STATE'
+    SignalName = 'eufs_can1.VCU2AI_status.AS_STATE'
     PushValue = '5'
     ReleaseValue = '5'
     UseSignalCycleTime = False
@@ -127,7 +127,7 @@ object Scene1: _Scene
     Height = 23
     Caption = 'Manual Driving'
     TabOrder = 5
-    SignalName = 'eufs_can2.VCU2AI_Status.AS_STATE'
+    SignalName = 'eufs_can1.VCU2AI_status.AS_STATE'
     PushValue = '6'
     ReleaseValue = '6'
     UseSignalCycleTime = False
@@ -152,7 +152,6 @@ object Scene1: _Scene
     SignalSettings.ValueFormat = '##0'
     SignalSettings.ValueTo = 260.000000000000000000
     SignalSettings.ValueUnit = 'Bar'
-    Value = 196.000000000000000000
     TabOrder = 6
     EnableMouseJump = False
     Font.Charset = DEFAULT_CHARSET

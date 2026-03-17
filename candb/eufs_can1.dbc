@@ -70,6 +70,9 @@ SG_ High_Temperature : 39|8@0+ (1,0) [0|255] "Celsius" Vector__XXX
 SG_ Low_Temperature : 47|8@0+ (1,0) [0|255] "Celsius" Vector__XXX
 SG_ CRC_Checksum : 63|8@0+ (1,1721) [1721|1721] "" Vector__XXX
 
+BO_ 84 VCU2AI_status: 1 Vector__XXX
+SG_ AS_STATE : 0|3@1+ (1,0) [0|7] "" Vector__XXX
+
 CM_ BO_ 1712 "This ID Transmits at 8 ms.";
 CM_ BO_ 1713 "This ID Transmits at 104 ms.";
 
@@ -87,3 +90,4 @@ BA_ "GenSigStartValue" SG_ 1713 CRC_Checksum 1721;
 VAL_ 513 Inverter_Snd_Mux 49 "Send_mux_49" 144 "Send_mux_144" 81 "Send_mux_81" 61 "Send_mux_61";
 VAL_ 385 Inveter_Rcv_Mux 160 "Inv_Rcv_Mux_160" 216 "Inv_Rcv_Mux_216" 227 "Inv_Rcv_Mux_227" 226 "Inv_Rcv_Mux_226" 232 "Inv_Rcv_Mux_232" 48 "Inv_Rcv_Mux_48" 81 "Inv_Rcv_Mux_81";
 VAL_ 3 EV_STATE 1 "TS_OFF" 2 "TS_ACTIVE" 3 "MANUAL_DRIVING" 7 "CORSA_MODE";
+VAL_ 84 AS_STATE 1 "OFF" 2 "READY" 3 "DRIVING" 4 "EMERGENCY" 5 "FINISHED" 6 "MANUAL_DRIVING";
