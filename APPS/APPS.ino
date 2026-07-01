@@ -3,390 +3,686 @@
 #include <Arduino_CAN.h>
 #include <EEPROM.h>
 
+
+unsigned long debugLastPrintTime = 0;
+const unsigned long DEBUG_PRINT_INTERVAL = 1000; // 1 second
+
+
 // IMPORTANT: APPS1 SENSOR ADC OUTPUT MUST INCREASE WHEN PEDAL IS PRESSED, APPS2 SENSOR ADC OUTPUT MUST DECREASE WHEN PEDAL IS PRESSED
 
+// const int PULSES_PER_REV = 12;
+// const int MAX_WHEEL_RPM = 2500;
+// const int STOP_TIMEOUT_US = 200000;
+// const int TX_PERIOD_US = 10000;  // 100 Hz
+
+// const int MIN_PULSE_SPACING_US =
+//   60000000UL / (PULSES_PER_REV * MAX_WHEEL_RPM);
+// const unsigned long WHEEL_SERIAL_PERIOD_MS = 100;
+
+// struct WheelState {
+//   volatile unsigned long lastEdgeUs = 0;
+//   volatile unsigned long lastIntervalUs = 0;
+//   volatile unsigned long lastValidPulseUs = 0;
+//   volatile unsigned int rpm_x10 = 0;
+// };
+
+// static inline void capturePulse(volatile WheelState &w) {
+//   int nowUs = micros();
+
+//   if (w.lastEdgeUs == 0) {
+//     w.lastEdgeUs = nowUs;
+//     w.lastValidPulseUs = nowUs;
+//     return;
+//   }
+
+//   unsigned long dtUs = nowUs - w.lastEdgeUs;
+
+//   if (dtUs < MIN_PULSE_SPACING_US) {
+//     return;
+//   }
+
+//   w.lastIntervalUs = dtUs;
+//   w.lastEdgeUs = nowUs;
+//   w.lastValidPulseUs = nowUs;
+// }
+
+// static inline void updateWheelSpeed(volatile WheelState &w) {
+//   int intervalUs;
+//   int lastValidPulseUs;
+
+//   noInterrupts();
+//   intervalUs = w.lastIntervalUs;
+//   lastValidPulseUs = w.lastValidPulseUs;
+//   interrupts();
+
+//   unsigned long nowUs = micros();
+
+//   if (lastValidPulseUs == 0 || (nowUs - lastValidPulseUs) > STOP_TIMEOUT_US) {
+//     noInterrupts();
+//     w.rpm_x10 = 0;
+//     interrupts();
+//     return;
+//   }
+
+//   if (intervalUs == 0) return;
+
+//   int rpm_x10_calc =
+//     (int)(600000000ULL / (PULSES_PER_REV * (int)intervalUs));
+
+//   if (rpm_x10_calc > 65535) rpm_x10_calc = 65535;
+
+//   noInterrupts();
+//   w.rpm_x10 = (int)rpm_x10_calc;
+//   interrupts();
+// }
+
+
 // ***CALIBRATION VARIABLES***
-bool calibrated = true; // CHANGE TO FALSE TO CALIBRATE, THEN CHANGE TO TRUE AFTER CALIBRATION
-float bufferFactor = 0.1; //Adjusts the pedal buffer
+bool debugSerial = false;
+const uint16_t EEPROM_THROTTLE1_MIN[] = {0, 1};
+const uint16_t EEPROM_THROTTLE1_MAX[] = {2, 3};
+const uint16_t EEPROM_THROTTLE2_MIN[] = {4, 5};
+const uint16_t EEPROM_THROTTLE2_MAX[] = {6, 7};
 
-// Global Variables
-static uint32_t const CAN_ID_TORQUE = 0x201; //For inverter to read toqrue
-static uint32_t const CAN_ID_STATUS = 0x41; //For status messages
-static uint32_t const CAN_ID_VCU_STATUS = 0x3; //VCU Status
-static uint32_t const CAN_FILTER_MASK_STANDARD = 0x1FFC0000;
+// APPS Variables
+bool rawEnable = false;
+const unsigned int THROTTLE_MARGIN = 80; // ADC Values
+unsigned long throttleLastSampleTime = 0; // us
+const int THROTTLE_SAMPLE_INTERVAL = 50; // 50us = 20kHz
+const int THROTTLE_SAMPLE_SIZE = 10;
+unsigned int throttle1Samples[THROTTLE_SAMPLE_SIZE] = {0};
+unsigned int throttle2Samples[THROTTLE_SAMPLE_SIZE] = {0};
+unsigned int throttleSampleIndex = 0;
+unsigned long throttle1Sum = 0;
+unsigned long throttle2Sum = 0;
+unsigned int throttle1Val = 0;
+unsigned int throttle2Val = 0;
+unsigned int throttle1Min = 0;
+unsigned int throttle1Max = 0;
+unsigned int throttle2Min = 0;
+unsigned int throttle2Max = 0;
+bool throttleErrorFlag = false;
+float throttlePercent = 0.0;
+unsigned long throttleMismatchStartTime = 0;
+const unsigned long THROTTLE_MISMATCH_TIMEOUT = 20; // ms
+bool throttleMismatchActive = false;
 
-////////////////////////////////////////////////////////////////////////////
+// BPS Variables
+const unsigned int BRAKE_MARGIN = 20;  // ADC Values
+unsigned long brakeLastSampleTime = 0; // millis
+const int BRAKE_SAMPLE_INTERVAL = 5; // 5ms = 200Hz
+const int BRAKE_SAMPLE_SIZE = 10;
+int brakeSamples[BRAKE_SAMPLE_SIZE] = {0};
+unsigned int brakeSampleIndex = 0;
+unsigned long brakeSum = 0;
+unsigned int brakeVal = 0;
+float brakePressure = 0.0; // Bar
+bool brakeErrorFlag = false;
 
-const int pressedApps1addr = 0; // EEPROM Addresses For Calibration Variables
-const int pressedApps2addr = 1;
-const int depressedApps1addr = 2;
-const int depressedApps2addr = 3;
+// SPI Chip Selects
+const int NUM_OF_CHIP_SELECTS = 2;
+const int CHIP_SELECT_0 = D1;
+const int CHIP_SELECT_1 = D0;
+const int ALL_CHIP_SELECTS[NUM_OF_CHIP_SELECTS] = {
+  CHIP_SELECT_0,
+  CHIP_SELECT_1
+};
 
+// CAN Bus Variables
+static int const CAN_ID_STATUS = 0x041; // For status messages
+static int const CAN_ID_SENSORS = 0x044; // Sensor Data
+static int const CAN_ID_CONFIG = 0x043; // Config Message for setup/debug
+static int const CAN_ID_APPS1_SETUP = 0x047; // Config message to set APPS1
+static int const CAN_ID_APPS1_RAW_VALUES = 0x045; // Debug message
+static int const CAN_ID_APPS2_SETUP = 0x048; // Config message to set APPS2
+static int const CAN_ID_APPS2_RAW_VALUES = 0x046; // Debug message
+static int const CAN_ID_TORQUE = 0x201; // For inverter to read toqrue
+static int const CAN_ID_VCU_STATUS = 0x3EC; // VCU Status
+static int const CAN_FILTER_MASK_STANDARD = 0x1FFC0000;
 
-int depressedApps1Cal; // depressed pedal ADC value of APPS input, set during calibration
-int depressedApps2Cal;
+const unsigned long CAN_MESSAGE_GAP = 1; // ms minimum gap
+const unsigned long TORQUE_PERIOD = 10;
+const unsigned long STATUS_PERIOD = 100;
+const unsigned long SENSOR_PERIOD = 100;
+const unsigned long RAW_THROTTLE_PERIOD = 200;
+unsigned long lastCANMessageTime = 0;
+unsigned long lastStatusTime = 0;
+unsigned long lastSensorTime = 0;
+unsigned long lastThrottle1Time = 0;
+unsigned long lastThrottle2Time = 0;
+unsigned long lastTorqueTime = 0;
 
-int pressedApps1Cal; // pressed ADC value of APPS input, set during calibration
-int pressedApps2Cal;
-
-float depressedApps1;
-float depressedApps2;
-float pressedApps1;
-float pressedApps2;
-
-
-////////////////////////////////////////////////////////////////////////////
-
-
-const int apps1Pin = A0;  // (ADC09/A0/P014/D0) Analog Pins
-const int apps2Pin = A1;  // (ADC00/A1/P000/D1)
-const int bps1Pin = A2;  // (ADC01/A2/P001/D2)
-const int bps2Pin = A3;  // (ADC02/A3/P002/D3)
-
-float apps1 = 0;  //Float Percentage (0-100) % for APPS output
-float apps2 = 0;
-int appsOutput; //Int Apps Output % for CAN transmission
-float appsBuffer = 0;
-
-////////////////////////////////////////////////////////////////////////////
-
-
-int rawBps1;
-
-int16_t bps1 = 0;   //Float BPS Sensors in bar
-
-int bps1Output; // Int BPS Sensors for CAN transmission
-
-float minBps = 0; // Plausible range of BPS Sensors in V (3.3V - 0.5 V offset)
-float maxBps = 2.8;
-
-
-float offset = 0.5; // BPS Sensor Offset in V
-
-bool appsFlag = 0; // 1 normal, 0 if implausability or sensor value overlap
-bool bps1Flag = 0; // 1 normal, 0 if outside sensor range
-bool pedalActive = 0;
-
-int apps1FilterSum = 0; // Average of 92 APPS sensor Samples, sampled at 92Hz
-int apps2FilterSum = 0;
-int bps1FilterSum = 0;
-
-int filteredApps1; // Post-Filter APPS ADC Readings
-int filteredApps2;
-int filteredBps1;
-
-
-enum VCUState {
+// EV State Machine
+enum EVState {
   TS_OFF = 1,
   TS_ACTIVE = 2,
   MANUAL_DRIVING = 3,
   CORSA_MODE = 7
 };
-
-VCUState currentState = TS_OFF;
+EVState currentState = TS_OFF;
 unsigned long lastHeartbeatTime = 0;
-const unsigned long heartbeatTimeout = 100; // ms, you can increase to 500ms or more
+const unsigned long heartbeatTimeout = 200; // ms, you can increase to 250ms
+unsigned long lastTorqueSendTime = 0;
+const unsigned long TORQUE_SEND_INTERVAL_MS = 10; // 100 Hz
+int torqueCommand = 0;
 
-int16_t torqueCommand = 0;
-uint8_t torqueLow = 0;
-uint8_t bps1Low = 0;
-uint8_t torqueHigh = 0;
-uint8_t bps1High = 0;
-uint8_t statusFlags = 0;
+////////////////////////////////////////////////////////////////////////////
 
+/**
+ * @brief Read the value using SPI
+ * 
+ * @param chipSelect The chip select
+ * @return unsigned int Value read
+ */
+unsigned int readChip(bool channel1, unsigned int chipSelect) {
+  // https://github.com/souviksaha97/MCP3202/blob/master/src/MCP3202.cpp#L48
+  unsigned int dataIn = 0;
+  unsigned int result = 0;
+  digitalWrite(chipSelect, LOW);
+  uint8_t dataOut = 0b00000001;
+  dataIn = SPI.transfer(dataOut);
+  int dataOutChannel0 = 0b10100000;
+  int dataOutChannel1 = 0b11100000;
+  dataOut = channel1 ? dataOutChannel1 : dataOutChannel0;
+  dataIn = SPI.transfer(dataOut);
+  result = dataIn & 0x0F;
+  dataIn = SPI.transfer(0x00);
+  result = result << 8;
+  result = result | dataIn;
+  digitalWrite(chipSelect, HIGH);
+  return result;
+}
 
-void setup() {
- 
-  analogReadResolution(10); //Ten bit ADC
- 
-  Serial.begin(115200); //Begin serial bus, infinite loop if error
-  //while (!Serial) { }
-  CAN.setFilterMask_Standard(CAN_FILTER_MASK_STANDARD);
+// TODO: remove
+void logCAN(const char* label, uint16_t id) {
+  if (debugSerial) {
+    Serial.print("[CAN RX] ");
+    Serial.print(label);
+    Serial.print(" ID: 0x");
+    Serial.println(id, HEX);
+  }
+}
 
-  for (int mailbox = 0; mailbox < R7FA4M1_CAN::CAN_MAX_NO_STANDARD_MAILBOXES; mailbox++)
-  {
-    CAN.setFilterId_Standard(mailbox, CAN_ID_VCU_STATUS);
+void handleReceive() {
+  if (CAN.available()) {
+    CanMsg const msg = CAN.read();
+    switch (msg.id) {
+      // -------------------------
+      // VCU heartbeat / state
+      // -------------------------
+      case CAN_ID_VCU_STATUS:
+        currentState = static_cast<EVState>(msg.data[0]);
+        lastHeartbeatTime = millis();
+        logCAN("VCU_STATUS", msg.id);
+        break;
+      // -------------------------
+      // CONFIG
+      // -------------------------
+      case CAN_ID_CONFIG:
+        rawEnable = msg.data[0] & 0x01;
+        debugSerial = msg.data[0] & 0x02;
+        logCAN("CONFIG", msg.id);
+        break;
+      // -------------------------
+      // APPS1 setup
+      // -------------------------
+      case CAN_ID_APPS1_SETUP: {
+        uint16_t throttle1MinUpdate =
+          (uint16_t)((msg.data[1] << 8) | msg.data[0]);
+        uint16_t throttle1MaxUpdate =
+          (uint16_t)((msg.data[3] << 8) | msg.data[2]);
+        setThrottle1(throttle1MinUpdate, throttle1MaxUpdate);
+        readThrottleSetpoints();
+        logCAN("APPS1_SETUP", msg.id);
+        break;
+      }
+      // -------------------------
+      // APPS2 setup
+      // -------------------------
+      case CAN_ID_APPS2_SETUP: {
+        uint16_t throttle2MinUpdate =
+          (uint16_t)((msg.data[1] << 8) | msg.data[0]);
+        uint16_t throttle2MaxUpdate =
+          (uint16_t)((msg.data[3] << 8) | msg.data[2]);
+        setThrottle2(throttle2MinUpdate, throttle2MaxUpdate);
+        readThrottleSetpoints();
+        logCAN("APPS2_SETUP", msg.id);
+        break;
+      }
+      default:
+        break;
+    }
   }
 
-  if (!CAN.begin(CanBitRate::BR_500k)) //Begin CAN bus, send error message and infinite loop if error
-  {
+  // -------------------------
+  // Fail-safe heartbeat timeout
+  // -------------------------
+  if (millis() - lastHeartbeatTime > heartbeatTimeout) {
+    currentState = TS_OFF;
+
+    if (debugSerial) {
+      Serial.println("[CAN] Heartbeat timeout -> TS_OFF");
+    }
+  }
+}
+
+int16_t readEEPROM16(const uint16_t address[]) {
+  uint8_t lowByte = EEPROM.read(address[0]);
+  uint8_t highByte = EEPROM.read(address[1]);
+  return (int16_t)((highByte << 8) | lowByte);
+}
+
+void writeEEPROM16(const uint16_t address[], int16_t value) {
+  uint8_t lowByte = value & 0xFF;
+  uint8_t highByte = (value >> 8) & 0xFF;
+  EEPROM.write(address[0], lowByte);
+  EEPROM.write(address[1], highByte);
+}
+
+void readThrottleSetpoints() {
+  throttle1Min = readEEPROM16(EEPROM_THROTTLE1_MIN);
+  throttle1Max = readEEPROM16(EEPROM_THROTTLE1_MAX);
+  throttle2Min = readEEPROM16(EEPROM_THROTTLE2_MIN);
+  throttle2Max = readEEPROM16(EEPROM_THROTTLE2_MAX);
+}
+
+void setThrottle1(int16_t minValue, int16_t maxValue) {
+  int16_t storedMin;
+  int16_t storedMax;
+  // Read existing values
+  storedMin = readEEPROM16(EEPROM_THROTTLE1_MIN);
+  storedMax = readEEPROM16(EEPROM_THROTTLE1_MAX);
+  // Update only if values changed
+  if (storedMin != minValue) {
+    writeEEPROM16(EEPROM_THROTTLE1_MIN, minValue);
+  }
+  if (storedMax != maxValue) {
+    writeEEPROM16(EEPROM_THROTTLE1_MAX, maxValue);
+  }
+}
+
+void setThrottle2(int16_t minValue, int16_t maxValue) {
+  int16_t storedMin;
+  int16_t storedMax;
+  // Read existing values
+  storedMin = readEEPROM16(EEPROM_THROTTLE2_MIN);
+  storedMax = readEEPROM16(EEPROM_THROTTLE2_MAX);
+  // Update only if values changed
+  if (storedMin != minValue) {
+    writeEEPROM16(EEPROM_THROTTLE2_MIN, minValue);
+  }
+  if (storedMax != maxValue) {
+    writeEEPROM16(EEPROM_THROTTLE2_MAX, maxValue);
+  }
+}
+
+//----------------
+// Throttle Pedal
+//----------------
+
+void readThrottle() {
+  if (micros() - throttleLastSampleTime >= THROTTLE_SAMPLE_INTERVAL) {
+    throttleLastSampleTime = micros();
+    // Read raw sensor values
+    unsigned int throttle1Raw = readChip(false, CHIP_SELECT_1);
+    unsigned int throttle2Raw = readChip(true, CHIP_SELECT_1);
+    // Remove oldest samples from the sum
+    throttle1Sum -= throttle1Samples[throttleSampleIndex];
+    throttle2Sum -= throttle2Samples[throttleSampleIndex];
+    // Add new samples
+    throttle1Samples[throttleSampleIndex] = throttle1Raw;
+    throttle2Samples[throttleSampleIndex] = throttle2Raw;
+    throttle1Sum += throttle1Raw;
+    throttle2Sum += throttle2Raw;
+    // Advance buffer index
+    throttleSampleIndex = (throttleSampleIndex + 1) % THROTTLE_SAMPLE_SIZE;
+    // Compute filtered value
+    throttle1Val = (unsigned int) throttle1Sum / THROTTLE_SAMPLE_SIZE;
+    throttle2Val = (unsigned int) throttle2Sum / THROTTLE_SAMPLE_SIZE;
+    // throttle1Val = 1738;
+    // throttle2Val = 944;
+    // throttle1Val = 1843;
+    // throttle2Val = 860;
+    // throttle1Val = 0;
+    // throttle2Val = 0;
+    // throttle1Val = 4095;
+    // throttle2Val = 4095;
+  }
+}
+
+void checkThrottleSCS() {
+  throttleErrorFlag = false;
+  // Sensor 1 range check
+  if (abs((int)throttle1Val - (int)throttle1Min) <= THROTTLE_MARGIN) throttle1Val = throttle1Min;
+  if (abs((int)throttle1Val - (int)throttle1Max) <= THROTTLE_MARGIN) throttle1Val = throttle1Max;
+  // Sensor 2 range check
+  if (abs((int)throttle2Val - (int)throttle2Min) <= THROTTLE_MARGIN) throttle2Val = throttle2Min;
+  if (abs((int)throttle2Val - (int)throttle2Max) <= THROTTLE_MARGIN) throttle2Val = throttle2Max;
+  // Out of range fault
+  if (throttle1Val < throttle1Min || throttle1Val > throttle1Max) {
+    throttleErrorFlag = true;
+    throttle1Val = throttle1Min;
+  }
+  if (throttle2Val < throttle2Min || throttle2Val > throttle2Max) {
+    throttleErrorFlag = true;
+    throttle2Val = throttle2Max;
+  }
+}
+
+void calculateThrottle() {
+  float throttle1Percent = ((float)(throttle1Val - throttle1Min) 
+    / (float)(throttle1Max - throttle1Min)) * 100.0;
+  float throttle2Percent = ((float)(throttle2Max - throttle2Val) 
+    / (float)(throttle2Max - throttle2Min)) * 100.0;
+  // Check throttle similarity
+  if (abs(throttle1Percent - throttle2Percent) >= 10.0) {
+    if (throttleMismatchStartTime == 0) {
+      throttleMismatchStartTime = millis();
+    }
+    if (millis() - throttleMismatchStartTime >= THROTTLE_MISMATCH_TIMEOUT) {
+      throttleErrorFlag = true;
+      throttleMismatchActive = true;
+    }
+  } else {
+    // Sensors agree again
+    throttleMismatchStartTime = 0;
+    throttleMismatchActive = false;
+  }
+  // Average redundant sensors
+  throttlePercent = (throttle1Percent + throttle2Percent) / 2.0;
+  // Clamp final result
+  throttlePercent = constrain(throttlePercent, 0, 100);
+}
+
+//----------------
+// Brake Pressure
+//----------------
+const int BRAKE_MIN_SCS = (0.4/5.0) * 4095;
+const int BRAKE_MIN_VAL = (0.5/5.0) * 4095;
+const int BRAKE_MAX_VAL = (4.5/5.0) * 4095;
+const int BRAKE_MAX_SCS = (4.6/5.0) * 4095;
+
+void readBrakes() {
+  if (millis() - brakeLastSampleTime >= BRAKE_SAMPLE_INTERVAL) {
+    brakeLastSampleTime = millis();
+    // Read raw sensor value
+    int brakeRaw = readChip(false, CHIP_SELECT_0);
+    // Remove oldest sample from sum
+    brakeSum -= brakeSamples[brakeSampleIndex];
+    // Add new sample
+    brakeSamples[brakeSampleIndex] = brakeRaw;
+    brakeSum += brakeRaw;
+    // Advance buffer index
+    brakeSampleIndex = (brakeSampleIndex + 1) % BRAKE_SAMPLE_SIZE;
+    // Compute filtered value
+    brakeVal = brakeSum / BRAKE_SAMPLE_SIZE;
+  }
+}
+
+void checkBrakesSCS() {
+  brakeErrorFlag = false;
+  if (brakeVal >= BRAKE_MAX_SCS) brakeErrorFlag = true;
+  if (brakeVal >= BRAKE_MAX_VAL) brakeVal = BRAKE_MAX_VAL;
+  if (brakeVal <= BRAKE_MIN_SCS) brakeErrorFlag = true;
+  if (brakeVal <= BRAKE_MIN_VAL) brakeVal = BRAKE_MIN_VAL;
+}
+
+void calculateBrakePressure() {
+  // Calculate Brake Pressure
+  brakePressure = ((brakeVal - BRAKE_MIN_VAL) * (5.0/4095) * 1000.0) / 15.38;
+  // Clamp final result
+  brakePressure = constrain(brakePressure, 0, 260);
+  // TODO: remove
+  // if (millis() - debugLastPrintTime >= DEBUG_PRINT_INTERVAL) {
+  //   debugLastPrintTime = millis();
+
+  //   Serial.print("Val1: ");
+  //   Serial.println(brakePressure);
+  // }
+}
+
+//----------------
+// Inverter Torque Commands
+//----------------
+const float BRAKE_PRESSURE_THRESHOLD = 3.0; // bar
+unsigned long brakeThrottleStartTime = 0; // millis
+const int THROTTLE_BRAKE_TIME = 500; // ms
+const float THROTTLE_BRAKE_LIMIT = 25.0; // %
+bool brakeThrottleFault = false;
+bool pedalActive = false;
+
+void checkBrakeThrottle() {
+  // If fault already active, wait for reset condition
+  if (brakeThrottleFault) {
+    if (throttlePercent < 5.0) {
+      brakeThrottleFault = false;
+      brakeThrottleStartTime = 0;
+    }
+    return;
+  }
+
+  // Detect brake + throttle conflict
+  if ((brakePressure > BRAKE_PRESSURE_THRESHOLD) &&
+      (throttlePercent > THROTTLE_BRAKE_LIMIT)) {
+    if (brakeThrottleStartTime == 0) brakeThrottleStartTime = millis();
+    if (millis() - brakeThrottleStartTime >= THROTTLE_BRAKE_TIME) {
+      brakeThrottleFault = true;
+    }
+  } else {
+    // Condition has cleared before timeout
+    brakeThrottleStartTime = 0;
+  }
+}
+
+void calculateTorque() {
+  if (throttleErrorFlag || brakeErrorFlag || brakeThrottleFault) {
+    pedalActive = false;
+    torqueCommand = 0;
+    return;
+  }
+  torqueCommand = (throttlePercent / 100.0) * -30000;
+}
+
+//----------------
+// CAN Messages
+//----------------
+
+void processCAN() {
+  unsigned long now = millis();
+  // Enforce gap between any two CAN messages
+  if (now - lastCANMessageTime < CAN_MESSAGE_GAP) {
+    return;
+  }
+
+  if ((currentState == MANUAL_DRIVING) && (now - lastTorqueTime >= TORQUE_PERIOD)) {
+    sendTorqueRequest();
+    lastTorqueTime = now;
+    lastCANMessageTime = now;
+    return;
+  }
+
+  if (now - lastStatusTime >= STATUS_PERIOD) {
+    sendStatus();
+    lastStatusTime = now;
+    lastCANMessageTime = now;
+    return;
+  }
+
+  if (now - lastSensorTime >= SENSOR_PERIOD) {
+    sendSensors();
+    lastSensorTime = now;
+    lastCANMessageTime = now;
+    return;
+  }
+
+  if (rawEnable && (now - lastThrottle1Time >= RAW_THROTTLE_PERIOD)) {
+    sendThrottle1Raw();
+    lastThrottle1Time = now;
+    lastCANMessageTime = now;
+    return;
+  }
+  if (rawEnable && (now - lastThrottle2Time >= RAW_THROTTLE_PERIOD)) {
+    sendThrottle2Raw();
+    lastThrottle2Time = now;
+    lastCANMessageTime = now;
+    return;
+  }
+}
+
+void sendTorqueRequest() {
+  uint8_t torqueLow = torqueCommand & 0xFF;
+  uint8_t torqueHigh = (torqueCommand >> 8) & 0xFF;
+  // 0x90 = torque mode multiplex for inverter
+  uint8_t msg_data_torque[] = {0x90, torqueLow, torqueHigh};
+  CanMsg const msg(
+    CanStandardId(CAN_ID_TORQUE),
+    sizeof(msg_data_torque),
+    msg_data_torque
+  );
+  CAN.write(msg);
+}
+
+void sendStatus() {
+  uint8_t appsOutput = throttlePercent;
+  uint8_t statusFlags = 0;
+  statusFlags |= (brakeErrorFlag & 0x01) << 0;
+  statusFlags |= (0 & 0x01) << 1;
+  statusFlags |= (throttleErrorFlag & 0x01) << 2;
+  statusFlags |= (pedalActive & 0x01) << 3;
+  statusFlags |= (brakeThrottleFault & 0x01) << 4;
+
+  uint8_t msg_data_status[] = {appsOutput, statusFlags};
+  CanMsg const msg(CanStandardId(CAN_ID_STATUS), sizeof(msg_data_status), msg_data_status);
+  CAN.write(msg);
+}
+
+// TODO: Implement wheelspeed
+void sendSensors() {
+  int16_t brakePressureCommand = (int16_t)(brakePressure);
+  uint8_t bpsLow = brakePressureCommand & 0xFF;
+  uint8_t bpsHigh = (brakePressureCommand >> 8) & 0xFF;
+
+  // noInterrupts();
+  // fl = flState.rpm_x10;
+  // fr = frState.rpm_x10;
+  // interrupts();
+  uint8_t flLow = 0;
+  uint8_t flHigh = 0;
+  uint8_t frLow = 0;
+  uint8_t frHigh = 0;
+
+  uint8_t msg_data_sensors[] = {bpsLow, bpsHigh, 0, 0, flLow, flHigh, frLow, frHigh};
+  CanMsg const msg(CanStandardId(CAN_ID_SENSORS), sizeof(msg_data_sensors), msg_data_sensors);
+  CAN.write(msg);
+}
+
+void sendThrottle1Raw() {
+  uint8_t throttleLow = throttle1Val & 0xFF;
+  uint8_t throttleHigh = (throttle1Val >> 8) & 0xFF;
+  uint8_t throttleMinLow = throttle1Min & 0xFF;
+  uint8_t throttleMinHigh = (throttle1Min >> 8) & 0xFF;
+  uint8_t throttleMaxLow = throttle1Max & 0xFF;
+  uint8_t throttleMaxHigh = (throttle1Max >> 8) & 0xFF;
+
+  uint8_t msg_data_throttle_raw[] = {throttleLow, throttleHigh, throttleMinLow, throttleMinHigh, throttleMaxLow, throttleMaxHigh};
+  CanMsg const msg(CanStandardId(CAN_ID_APPS1_RAW_VALUES), sizeof(msg_data_throttle_raw), msg_data_throttle_raw);
+  CAN.write(msg);
+}
+
+void sendThrottle2Raw() {
+  uint8_t throttleLow = throttle2Val & 0xFF;
+  uint8_t throttleHigh = (throttle2Val >> 8) & 0xFF;
+  uint8_t throttleMinLow = throttle2Min & 0xFF;
+  uint8_t throttleMinHigh = (throttle2Min >> 8) & 0xFF;
+  uint8_t throttleMaxLow = throttle2Max & 0xFF;
+  uint8_t throttleMaxHigh = (throttle2Max >> 8) & 0xFF;
+
+  uint8_t msg_data_throttle_raw[] = {throttleLow, throttleHigh, throttleMinLow, throttleMinHigh, throttleMaxLow, throttleMaxHigh};
+  CanMsg const msg(CanStandardId(CAN_ID_APPS2_RAW_VALUES), sizeof(msg_data_throttle_raw), msg_data_throttle_raw);
+  CAN.write(msg);
+}
+
+//----------------
+// Logging
+//----------------
+
+void logConsole() {
+  if (millis() - debugLastPrintTime >= DEBUG_PRINT_INTERVAL) {
+    debugLastPrintTime = millis();
+    Serial.println("----- System Status -----");
+    // Error flags
+    Serial.print("Throttle Error: ");
+    Serial.println(throttleErrorFlag);
+    Serial.print("Brake Error: ");
+    Serial.println(brakeErrorFlag);
+    Serial.print("Brake/Throttle Fault: ");
+    Serial.println(brakeThrottleFault);
+    // Throttle sensors
+    Serial.print("Throttle 1 ADC: ");
+    Serial.println(throttle1Val);
+    Serial.print("Throttle 2 ADC: ");
+    Serial.println(throttle2Val);
+    Serial.print("Throttle %: ");
+    Serial.println(throttlePercent);
+    // Brake
+    Serial.print("Brake Pressure: ");
+    Serial.println(brakePressure);
+    // Torque
+    Serial.print("Torque Request: ");
+    Serial.println(torqueCommand);
+    Serial.println("-------------------------");
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  while (!Serial) { }
+  
+  // Setup chip selects
+  for (int i = 0; i < NUM_OF_CHIP_SELECTS; i++) {
+    pinMode(ALL_CHIP_SELECTS[i], OUTPUT);
+    // LOW to select chip
+    digitalWrite(ALL_CHIP_SELECTS[i], HIGH);
+  }
+  // Setup SPI
+  SPI.begin();
+
+  // CAN Bus Standby
+  pinMode(D4, OUTPUT);
+  digitalWrite(D4, LOW);
+  // Setup CAN Bus
+  if (!CAN.begin(CanBitRate::BR_500k)) {
     Serial.println("CAN.begin(...) failed.");
-  } 
+    for (;;) {}
+  }
+
+  // Read Throttle setpoints
+  readThrottleSetpoints();
 }
 
 void loop() {
+  handleReceive(); // Handle CAN receive
+  
+  // APPS
+  readThrottle();
+  checkThrottleSCS();
+  calculateThrottle();
 
-    if(calibrated == false){ //Run calibration only once if calibration boolean is false
+  // Brake Pressure
+  readBrakes();
+  checkBrakesSCS();
+  calculateBrakePressure();
 
-      Serial.println("Release the Acceleration Pedal and Then Press Any Key:");
-      // wait for incoming serial data: Then calibrate APPS senors
-      waitForSerial();
-//      depressedApps1Cal = analogRead(apps1Pin) / 5; // Divide by 5 in order to fit in one EEPROM address
-//      depressedApps2Cal = analogRead(apps2Pin) / 5;
-//
-//      EEPROM.update(depressedApps1addr, depressedApps1Cal);
-//      EEPROM.update(depressedApps2addr, depressedApps2Cal);
-
-      EEPROM.put(depressedApps1addr, analogRead(apps1Pin));
-      EEPROM.put(depressedApps2addr, analogRead(apps2Pin));
-
-      Serial.println("Fully Press the Acceleration Pedal and Then Press Any Key:");
-      waitForSerial();
-    
-//      pressedApps1Cal = analogRead(apps1Pin) / 5; // Divide by 5 in order to fit in one EEPROM address
-//      pressedApps2Cal = analogRead(apps2Pin) / 5;
-//
-//      EEPROM.update(pressedApps2addr, pressedApps2Cal);
-//      EEPROM.update(pressedApps1addr, pressedApps1Cal);
-      EEPROM.put(pressedApps2addr, analogRead(apps2Pin));
-      EEPROM.put(pressedApps1addr, analogRead(apps1Pin));
-
-      calibrated = true; // Reset calibration boolean so that calibration only runs once
-
-  }
-  getVCUStatus();             // Read and update state
-  movingAverageSensor();      // Sample ADC and calculate rolling average
-  getAppsBuffer();            // Calculate buffer from EEPROM (could be moved to setup if fixed)
-
+  // Send CAN Messages
   if (currentState == MANUAL_DRIVING) {
-    calculateAppsOutput();
-    appsImplausibilityCheck();
-    calculateTorqueCommand();
+    pedalActive = true;
+    checkBrakeThrottle();
+    calculateTorque();
   } else {
-    appsOutput = 0;
-    torqueCommand = 0;
-    pedalActive = 0; // disallow torque transmission outside manual mode
+    pedalActive = false;
   }
-
-  calculateBsp();             // Convert filtered voltage to bar
-  checkBpsPlausibility();     // Check if bar is plausible
-  sendCanMessages();          // Always send torque (0 if not allowed) + status
-
-  // Optional: Print debug
-  Serial.print("Current State: ");
-  Serial.println(currentState);
-  
-
-  // Serial Messages
-  Serial.println("Apps Flag:");
-  Serial.println(appsFlag);
-  Serial.println(" ");
-//  Serial.println("BPS1 Flag:");
-//  Serial.println(bps1Flag);
-//  Serial.println(" ");
-//  Serial.println("BPS2 Flag:");
-//  Serial.println(bps2Flag);
-//  Serial.println(" ");
-  Serial.println("APPS Output Percentage:");
-  Serial.println(appsOutput);
-  Serial.println(" ");
-//  Serial.println("Brake Pressure 1 (bar): ");
-//  Serial.println(bps1Output);
-//  Serial.println(" ");
-//  Serial.println("Brake Pressure 2 (bar): ");
-//  Serial.println(bps2Output);
-//  Serial.println(" ");
-
-  /* Transmit the CAN message, capture and display an
-   * error core in case of failure.
-   */
-//  int const rc = CAN.write(msg);
-//  delay(1);
-//  int const rc1 = CAN.write(statusMsg);
-//
-//  
-//  if (rc < 0 || rc1 < 0)
-//  {
-//    Serial.print  ("CAN.write(...) failed with error code ");
-//    Serial.println(rc);
-//  }
-
-}
-
-const int sampleSize = 100;
-int apps1Samples[sampleSize] = {0};
-int apps2Samples[sampleSize] = {0};
-int bps1Samples[sampleSize] = {0};
-
-int sampleIndex = 0;
-unsigned long lastSampleTime = 0;
-const unsigned long sampleInterval = 1; // in milliseconds
-
-
-void movingAverageSensor() {
-  if (millis() - lastSampleTime >= sampleInterval) {
-    lastSampleTime = millis();
-
-    // Read new samples
-    apps1Samples[sampleIndex] = analogRead(apps1Pin);
-    apps2Samples[sampleIndex] = analogRead(apps2Pin);
-    bps1Samples[sampleIndex] = analogRead(bps1Pin);
-
-    // Advance the circular buffer index
-    sampleIndex = (sampleIndex + 1) % sampleSize;
-
-    // Calculate rolling averages
-    long sumApps1 = 0;
-    long sumApps2 = 0;
-    long sumBps1 = 0;
-
-    for (int i = 0; i < sampleSize; i++) {
-      sumApps1 += apps1Samples[i];
-      sumApps2 += apps2Samples[i];
-      sumBps1  += bps1Samples[i];
-    }
-
-    filteredApps1 = sumApps1 / sampleSize;
-    filteredApps2 = sumApps2 / sampleSize;
-    filteredBps1  = sumBps1  / sampleSize;
-  }
-}
-
-void calculateAppsOutput(){
-  //APPS 1 Checks
-  appsFlag = 0; //Reset Apps Flag
-  pedalActive = 1;
-  if(filteredApps1 < (depressedApps1 + appsBuffer) && filteredApps1 > (depressedApps1 - appsBuffer)){ //Depressed Buffer Zone
-      apps1 = 0;     
-  }
-  else if(filteredApps1 > pressedApps1 && filteredApps1 < (pressedApps1 + appsBuffer)){ // Pressed Buffer Zone
-    apps1 = 100;
-      }
-  else if(filteredApps1 >= depressedApps1 && filteredApps1 <= pressedApps1){ // Linear Zone
-      apps1 = ((filteredApps1 - depressedApps1) / (pressedApps1 - depressedApps1)) * 100;
-  }
-  else{ // Implausible Zones
-    appsFlag = 1;
-    pedalActive = 0;
-    apps1 = 0;
-    Serial.println("ERROR: APPS 1 OUT OF RANGE");
-  }
-
-  //APPS 2 Checks
-  if(filteredApps2 > (depressedApps2 - appsBuffer) && filteredApps2 < (depressedApps2 + appsBuffer)){ // Depressed Buffer Zone
-      apps2 = 0;     
-  }
-  else if(filteredApps2 < pressedApps2 && filteredApps2 < (pressedApps2 - appsBuffer)){ // Pressed Buffer Zone
-    apps2 = 100;
-      }
-  else if(filteredApps2 <= depressedApps2 && filteredApps2 >= pressedApps2){ // Linear Zone
-      apps2 = ((depressedApps2 - filteredApps2) / (depressedApps2 - pressedApps2)) * 100;
-  }
-  else{ // Implausible Zones
-    appsFlag = 1;
-    pedalActive = 0;
-    apps2 = 0;
-    Serial.println("ERROR: APPS 2 OUT OF RANGE");
-  } 
-  
-  appsOutput = apps1;
-  
-}
-
-void appsImplausibilityCheck(){
-  if (abs(apps1 - apps2) >= 10){
-    appsFlag = 1;
-    pedalActive = 0;
-    appsOutput = 0;
-    Serial.println("ERROR: APPS IMPLAUSIBILITY");
-  }
-  else{
-    appsOutput = apps1;
-  }
-}
-
-
-
-void calculateTorqueCommand() {
-  if (currentState == MANUAL_DRIVING) {
-    torqueCommand = ((float)appsOutput / 100.0) * -3000;
-  } else {
-    torqueCommand = 0;
-    pedalActive = 0;
-  }
-
-  torqueLow = torqueCommand & 0xFF;
-  torqueHigh = (torqueCommand >> 8) & 0xFF;
-}
-
-
-void getAppsBuffer(){
- 
-  EEPROM.get(depressedApps1addr, depressedApps1);
-  EEPROM.get(depressedApps2addr, depressedApps2);
-  EEPROM.get(pressedApps1addr, pressedApps1);
-  EEPROM.get(pressedApps2addr, pressedApps2);
-
-  float appsBuffer = bufferFactor * ( ((pressedApps1 - depressedApps1) / 2) + ((depressedApps2 - pressedApps2) / 2) ); // Buffer set to a percentage of the average range of ADC values
-}
-
-void checkBpsPlausibility(){
-  //BPS Checks
-  bps1Flag = 0; //Reset BPS Flags
-//  bps2Flag = 1;
-
-  if (bps1 < minBps || bps1 > maxBps){
-    bps1Flag = 1;
-    Serial.println("ERROR: BPS1 OUT OF PLAUSIBLE RANGE");
-    }
-//  if (bps2 < minBps || bps2 > maxBps){
-//    bps2Flag = 1;
-//    Serial.println("ERROR: BPS2 OUT OF PLAUSIBLE RANGE");
-//    }
-}
-
-void calculateBsp(){
-  bps1 = ((bps1 - offset) * 1000.0) / 15.38; // bar... subtracts 0.5V sensor offset ---> 1000 mV/V ---> 15.38 mV/bar
-//  bps2 = ((bps2 - offset) * 1000.0) / 15.38;
-  bps1Low = bps1 & 0xFF;
-  bps1High = (bps1 >> 8) & 0xFF;
-}
-
-void sendCanMessages(){
-  statusFlags |= (bps1Flag    & 0x01) << 0;
-  statusFlags |= (0           & 0x01) << 1;
-  statusFlags |= (appsFlag    & 0x01) << 2;
-  statusFlags |= (pedalActive & 0x01) << 3;
-  uint8_t msg_data_torque[] = {0x90, torqueLow, torqueHigh}; //0x90 for torque mode multiplex on the inverter, if you use 0x31 it will send a speed command.
-  uint8_t msg_data_status[] = {bps1Low, bps1High, 0, 0, appsOutput, statusFlags};
-  CanMsg const msg(CanStandardId(CAN_ID_TORQUE), sizeof(msg_data_torque), msg_data_torque);
-  CanMsg const statusMsg(CanStandardId(CAN_ID_STATUS), sizeof(msg_data_status), msg_data_status);
-
-  int const rc = CAN.write(msg);
-  delay(1); // DOUBLE CHECK THE NEED FOR THIS DELAY
-  int const rc1 = CAN.write(statusMsg);
-
-  
-  if (rc < 0 || rc1 < 0)
-  {
-    Serial.print  ("CAN.write(...) failed with error code ");
-    Serial.println(rc);
-  }
-  
-}
-
-
-void getVCUStatus() {
-  if (CAN.available()) {
-    CanMsg const msg = CAN.read();
-
-    if (msg.id == CAN_ID_VCU_STATUS) {
-      currentState = static_cast<VCUState>(msg.data[0]);
-      lastHeartbeatTime = millis(); // reset heartbeat timeout
-    }
-  }
-
-  // If no message in a while, fail safe to TS_OFF
-  if (millis() - lastHeartbeatTime > heartbeatTimeout) {
-    currentState = TS_OFF;
-  }
-}
-
-
-// IMPORTANT TO READ THE BUTTON PRESS DURING CALIBRATION
-
-void waitForSerial(){
-  while (!Serial.available()) {
-  }
-  Serial.println(Serial.read());
+  processCAN();
+  // TODO: Add wheelspeeds
+  // TODO: add CAN mask
+  if (debugSerial) logConsole();
 }
