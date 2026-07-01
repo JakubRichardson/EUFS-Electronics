@@ -1,7 +1,7 @@
 CLSID = {DFAFFAC0-2F50-428E-824C-B97089CD5F3F}
 object _FormData
   FormatVersion = '3.0'
-  Locked = True
+  Locked = False
   AutoFrameRate = False
 end
 object Scene1: _Scene
@@ -10,7 +10,7 @@ object Scene1: _Scene
   Color = clWhite
   Index = 0
   ExplicitWidth = 559
-  ExplicitHeight = 345
+  ExplicitHeight = 319
   PixelsPerInch = 96
   TextHeight = 13
   object Label1: _Label
@@ -151,8 +151,6 @@ object Scene1: _Scene
     SignalSettings.Name2 = 'eufs_can2.APPS2VCU.Front_Brake_Line_Pressure'
     SignalSettings.ValueFormat = '##0'
     SignalSettings.ValueTo = 260.000000000000000000
-    SignalSettings.ValueUnit = 'Bar'
-    Value = 196.000000000000000000
     TabOrder = 6
     EnableMouseJump = False
     Font.Charset = DEFAULT_CHARSET
@@ -208,5 +206,19 @@ object Scene1: _Scene
     ScaleSettings.ValueFormat = '##0'
     ScaleSettings.ValueFormatLog = '0e-0'
     ScaleSettings.DecimalPlaces = 0
+  end
+  object Button7: _Button
+    Left = 430
+    Top = 173
+    Width = 75
+    Height = 23
+    Caption = 'AS_STATE'
+    TabOrder = 7
+    SignalName = 'eufs_can1.VCU2AI_status.AS_STATE'
+    PushValue = '2'
+    ReleaseValue = '2'
+    UseSignalCycleTime = True
+    CycleTime = 0
+    IsPaused = False
   end
 end
