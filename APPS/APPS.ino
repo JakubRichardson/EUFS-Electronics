@@ -3,79 +3,78 @@
 #include <Arduino_CAN.h>
 #include <EEPROM.h>
 
-
+// TODO: remove
 unsigned long debugLastPrintTime = 0;
 const unsigned long DEBUG_PRINT_INTERVAL = 1000; // 1 second
 
+// -------------------------
+// Wheel speeds
+// -------------------------
 
-// IMPORTANT: APPS1 SENSOR ADC OUTPUT MUST INCREASE WHEN PEDAL IS PRESSED, APPS2 SENSOR ADC OUTPUT MUST DECREASE WHEN PEDAL IS PRESSED
+// TODO: move
+const int WS_FR_PIN = D5;
+const int WS_FL_PIN = D6;
+const int PULSES_PER_REV = 12;
+const int MAX_WHEEL_RPM = 2500;
+const int STOP_TIMEOUT_US = 200000;
+const unsigned long MIN_PULSE_SPACING_US =
+  60000000UL / (PULSES_PER_REV * MAX_WHEEL_RPM);
 
-// const int PULSES_PER_REV = 12;
-// const int MAX_WHEEL_RPM = 2500;
-// const int STOP_TIMEOUT_US = 200000;
-// const int TX_PERIOD_US = 10000;  // 100 Hz
+struct WheelState {
+  volatile unsigned long lastEdgeUs = 0;
+  volatile unsigned long lastIntervalUs = 0;
+  volatile unsigned long lastValidPulseUs = 0;
+  volatile unsigned int rpm_x10 = 0;
+};
 
-// const int MIN_PULSE_SPACING_US =
-//   60000000UL / (PULSES_PER_REV * MAX_WHEEL_RPM);
-// const unsigned long WHEEL_SERIAL_PERIOD_MS = 100;
+WheelState flState;
+WheelState frState;
 
-// struct WheelState {
-//   volatile unsigned long lastEdgeUs = 0;
-//   volatile unsigned long lastIntervalUs = 0;
-//   volatile unsigned long lastValidPulseUs = 0;
-//   volatile unsigned int rpm_x10 = 0;
-// };
+static inline void capturePulse(volatile WheelState &w) {
+  int nowUs = micros();
+  if (w.lastEdgeUs == 0) {
+    w.lastEdgeUs = nowUs;
+    w.lastValidPulseUs = nowUs;
+    return;
+  }
 
-// static inline void capturePulse(volatile WheelState &w) {
-//   int nowUs = micros();
+  unsigned long dtUs = nowUs - w.lastEdgeUs;
+  if (dtUs < MIN_PULSE_SPACING_US) return;
+  w.lastIntervalUs = dtUs;
+  w.lastEdgeUs = nowUs;
+  w.lastValidPulseUs = nowUs;
+}
 
-//   if (w.lastEdgeUs == 0) {
-//     w.lastEdgeUs = nowUs;
-//     w.lastValidPulseUs = nowUs;
-//     return;
-//   }
+void flISR() { capturePulse(flState); }
+void frISR() { capturePulse(frState); }
 
-//   unsigned long dtUs = nowUs - w.lastEdgeUs;
+static inline void updateWheelSpeed(volatile WheelState &w) {
+  unsigned long intervalUs;
+  unsigned long lastValidPulseUs;
+  // Atomic copy of interrupt-updated values
+  noInterrupts();
+  intervalUs = w.lastIntervalUs;
+  lastValidPulseUs = w.lastValidPulseUs;
+  interrupts();
 
-//   if (dtUs < MIN_PULSE_SPACING_US) {
-//     return;
-//   }
+  unsigned long nowUs = micros();
+  unsigned int rpm_x10_calc = 0;
 
-//   w.lastIntervalUs = dtUs;
-//   w.lastEdgeUs = nowUs;
-//   w.lastValidPulseUs = nowUs;
-// }
+  if (lastValidPulseUs == 0 || (nowUs - lastValidPulseUs) > STOP_TIMEOUT_US) {
+    rpm_x10_calc = 0;
+  } else if (intervalUs != 0) {
+    rpm_x10_calc = 
+      (unsigned int)(600000000UL / 
+      ((unsigned long)PULSES_PER_REV * intervalUs));
 
-// static inline void updateWheelSpeed(volatile WheelState &w) {
-//   int intervalUs;
-//   int lastValidPulseUs;
+    if (rpm_x10_calc > 65535) rpm_x10_calc = 65535;
+  }
 
-//   noInterrupts();
-//   intervalUs = w.lastIntervalUs;
-//   lastValidPulseUs = w.lastValidPulseUs;
-//   interrupts();
-
-//   unsigned long nowUs = micros();
-
-//   if (lastValidPulseUs == 0 || (nowUs - lastValidPulseUs) > STOP_TIMEOUT_US) {
-//     noInterrupts();
-//     w.rpm_x10 = 0;
-//     interrupts();
-//     return;
-//   }
-
-//   if (intervalUs == 0) return;
-
-//   int rpm_x10_calc =
-//     (int)(600000000ULL / (PULSES_PER_REV * (int)intervalUs));
-
-//   if (rpm_x10_calc > 65535) rpm_x10_calc = 65535;
-
-//   noInterrupts();
-//   w.rpm_x10 = (int)rpm_x10_calc;
-//   interrupts();
-// }
-
+  // Atomic update
+  noInterrupts();
+  w.rpm_x10 = rpm_x10_calc;
+  interrupts();
+}
 
 // ***CALIBRATION VARIABLES***
 bool debugSerial = false;
@@ -97,6 +96,8 @@ unsigned long throttle1Sum = 0;
 unsigned long throttle2Sum = 0;
 unsigned int throttle1Val = 0;
 unsigned int throttle2Val = 0;
+unsigned int throttle1Raw = 0;
+unsigned int throttle2Raw = 0;
 unsigned int throttle1Min = 0;
 unsigned int throttle1Max = 0;
 unsigned int throttle2Min = 0;
@@ -193,18 +194,9 @@ unsigned int readChip(bool channel1, unsigned int chipSelect) {
   return result;
 }
 
-// TODO: remove
-void logCAN(const char* label, uint16_t id) {
-  if (debugSerial) {
-    Serial.print("[CAN RX] ");
-    Serial.print(label);
-    Serial.print(" ID: 0x");
-    Serial.println(id, HEX);
-  }
-}
-
 void handleReceive() {
   if (CAN.available()) {
+    Serial.println("Received");
     CanMsg const msg = CAN.read();
     switch (msg.id) {
       // -------------------------
@@ -213,7 +205,6 @@ void handleReceive() {
       case CAN_ID_VCU_STATUS:
         currentState = static_cast<EVState>(msg.data[0]);
         lastHeartbeatTime = millis();
-        logCAN("VCU_STATUS", msg.id);
         break;
       // -------------------------
       // CONFIG
@@ -221,32 +212,31 @@ void handleReceive() {
       case CAN_ID_CONFIG:
         rawEnable = msg.data[0] & 0x01;
         debugSerial = msg.data[0] & 0x02;
-        logCAN("CONFIG", msg.id);
         break;
       // -------------------------
       // APPS1 setup
       // -------------------------
       case CAN_ID_APPS1_SETUP: {
+        if (!rawEnable) return;
         uint16_t throttle1MinUpdate =
           (uint16_t)((msg.data[1] << 8) | msg.data[0]);
         uint16_t throttle1MaxUpdate =
           (uint16_t)((msg.data[3] << 8) | msg.data[2]);
         setThrottle1(throttle1MinUpdate, throttle1MaxUpdate);
         readThrottleSetpoints();
-        logCAN("APPS1_SETUP", msg.id);
         break;
       }
       // -------------------------
       // APPS2 setup
       // -------------------------
       case CAN_ID_APPS2_SETUP: {
+        if (!rawEnable) return;
         uint16_t throttle2MinUpdate =
           (uint16_t)((msg.data[1] << 8) | msg.data[0]);
         uint16_t throttle2MaxUpdate =
           (uint16_t)((msg.data[3] << 8) | msg.data[2]);
         setThrottle2(throttle2MinUpdate, throttle2MaxUpdate);
         readThrottleSetpoints();
-        logCAN("APPS2_SETUP", msg.id);
         break;
       }
       default:
@@ -339,14 +329,8 @@ void readThrottle() {
     // Compute filtered value
     throttle1Val = (unsigned int) throttle1Sum / THROTTLE_SAMPLE_SIZE;
     throttle2Val = (unsigned int) throttle2Sum / THROTTLE_SAMPLE_SIZE;
-    // throttle1Val = 1738;
-    // throttle2Val = 944;
-    // throttle1Val = 1843;
-    // throttle2Val = 860;
-    // throttle1Val = 0;
-    // throttle2Val = 0;
-    // throttle1Val = 4095;
-    // throttle2Val = 4095;
+    throttle1Raw = throttle1Val;
+    throttle2Raw = throttle2Val;
   }
 }
 
@@ -432,13 +416,6 @@ void calculateBrakePressure() {
   brakePressure = ((brakeVal - BRAKE_MIN_VAL) * (5.0/4095) * 1000.0) / 15.38;
   // Clamp final result
   brakePressure = constrain(brakePressure, 0, 260);
-  // TODO: remove
-  // if (millis() - debugLastPrintTime >= DEBUG_PRINT_INTERVAL) {
-  //   debugLastPrintTime = millis();
-
-  //   Serial.print("Val1: ");
-  //   Serial.println(brakePressure);
-  // }
 }
 
 //----------------
@@ -556,20 +533,24 @@ void sendStatus() {
   CAN.write(msg);
 }
 
-// TODO: Implement wheelspeed
 void sendSensors() {
   int16_t brakePressureCommand = (int16_t)(brakePressure);
   uint8_t bpsLow = brakePressureCommand & 0xFF;
   uint8_t bpsHigh = (brakePressureCommand >> 8) & 0xFF;
 
-  // noInterrupts();
-  // fl = flState.rpm_x10;
-  // fr = frState.rpm_x10;
-  // interrupts();
-  uint8_t flLow = 0;
-  uint8_t flHigh = 0;
-  uint8_t frLow = 0;
-  uint8_t frHigh = 0;
+
+  unsigned int flRPM_x10;
+  unsigned int frRPM_x10;
+  // Copy safely from interrupt variables
+  noInterrupts();
+  flRPM_x10 = flState.rpm_x10;
+  frRPM_x10 = frState.rpm_x10;
+  interrupts();
+  // Split into CAN bytes
+  uint8_t flLow = flRPM_x10 & 0xFF;
+  uint8_t flHigh = (flRPM_x10 >> 8) & 0xFF;
+  uint8_t frLow = frRPM_x10 & 0xFF;
+  uint8_t frHigh = (frRPM_x10 >> 8) & 0xFF;
 
   uint8_t msg_data_sensors[] = {bpsLow, bpsHigh, 0, 0, flLow, flHigh, frLow, frHigh};
   CanMsg const msg(CanStandardId(CAN_ID_SENSORS), sizeof(msg_data_sensors), msg_data_sensors);
@@ -577,8 +558,8 @@ void sendSensors() {
 }
 
 void sendThrottle1Raw() {
-  uint8_t throttleLow = throttle1Val & 0xFF;
-  uint8_t throttleHigh = (throttle1Val >> 8) & 0xFF;
+  uint8_t throttleLow = throttle1Raw & 0xFF;
+  uint8_t throttleHigh = (throttle1Raw >> 8) & 0xFF;
   uint8_t throttleMinLow = throttle1Min & 0xFF;
   uint8_t throttleMinHigh = (throttle1Min >> 8) & 0xFF;
   uint8_t throttleMaxLow = throttle1Max & 0xFF;
@@ -590,8 +571,8 @@ void sendThrottle1Raw() {
 }
 
 void sendThrottle2Raw() {
-  uint8_t throttleLow = throttle2Val & 0xFF;
-  uint8_t throttleHigh = (throttle2Val >> 8) & 0xFF;
+  uint8_t throttleLow = throttle2Raw & 0xFF;
+  uint8_t throttleHigh = (throttle2Raw >> 8) & 0xFF;
   uint8_t throttleMinLow = throttle2Min & 0xFF;
   uint8_t throttleMinHigh = (throttle2Min >> 8) & 0xFF;
   uint8_t throttleMaxLow = throttle2Max & 0xFF;
@@ -651,6 +632,11 @@ void setup() {
   pinMode(D4, OUTPUT);
   digitalWrite(D4, LOW);
   // Setup CAN Bus
+  CAN.setFilterMask_Standard(CAN_FILTER_MASK_STANDARD);
+  CAN.setFilterId_Standard(0, CAN_ID_VCU_STATUS);
+  CAN.setFilterId_Standard(1, CAN_ID_CONFIG);
+  CAN.setFilterId_Standard(2, CAN_ID_APPS1_SETUP);
+  CAN.setFilterId_Standard(3, CAN_ID_APPS2_SETUP);
   if (!CAN.begin(CanBitRate::BR_500k)) {
     Serial.println("CAN.begin(...) failed.");
     for (;;) {}
@@ -658,10 +644,20 @@ void setup() {
 
   // Read Throttle setpoints
   readThrottleSetpoints();
+
+  // Setup Wheelspeeds
+  pinMode(WS_FL_PIN, INPUT);
+  pinMode(WS_FR_PIN, INPUT);
+  attachInterrupt(digitalPinToInterrupt(WS_FL_PIN), flISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(WS_FR_PIN), frISR, RISING);
 }
 
 void loop() {
   handleReceive(); // Handle CAN receive
+
+  // Wheelspeed
+  updateWheelSpeed(flState);
+  updateWheelSpeed(frState);
   
   // APPS
   readThrottle();
@@ -682,7 +678,5 @@ void loop() {
     pedalActive = false;
   }
   processCAN();
-  // TODO: Add wheelspeeds
-  // TODO: add CAN mask
   if (debugSerial) logConsole();
 }
