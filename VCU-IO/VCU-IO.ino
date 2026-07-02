@@ -2,10 +2,6 @@
 #include <FlexCAN_T4.h>
 #include <Fsm.h>
 
-// TODO - Tests:
-// Check cyclic receive from inverter
-// Check enable/disable works
-
 // Print Debug
 const bool LOG_STATE = true;
 
@@ -43,6 +39,10 @@ int lastButtonState = LOW;         // previous button reading
 // milliseconds, will quickly become a bigger number than can be stored in an int.
 unsigned long lastDebounceTime = 0;      // the last time the output pin was toggled
 const unsigned long DEBOUNCE_DELAY = 20; // the debounce time; increase if the output flickers
+
+// RES Messages
+const int RES_PDO = 0x191;
+bool resReceiving = false;
 
 // Inverter RFE Message
 bool RFE = false;
@@ -109,6 +109,16 @@ void inverterRequest(int request) {
   Can0.write(msg);
 }
 
+void resRequest() {
+  // Request RES mode
+  CAN_message_t msg;
+  msg.id = 0x000;
+  msg.buf[0] = 0x01;
+  msg.buf[1] = 0x11;
+  msg.len = 2;
+  Can0.write(msg);
+}
+
 void checkFlag() {
   if (millis() - lastAppsMessageTime < TIMEOUT_MS) return;
   appsGood = false;
@@ -143,6 +153,10 @@ void handleReceive(const CAN_message_t &msg) {
       } else {
         invDriveEnabled = false;
       }
+    }
+  } else if (msg.id == RES_PDO) {
+    if (!resReceiving) {
+      resReceiving = true;
     }
   }
 }
@@ -324,6 +338,7 @@ void loop() {
     lastRequestTime = millis();
     if(!invReceivingRun) inverterRequest(RUN_ID);
     if(!invReceivingEnbl) inverterRequest(INV_ENBL_ID);
+    if(!resReceiving) resRequest();
   }
   heartBeat(); // Send status heartbeat
 }

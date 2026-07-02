@@ -14,7 +14,7 @@ object Scene1: _Scene
   PixelsPerInch = 96
   TextHeight = 13
   object Label1: _Label
-    Left = 8
+    Left = 48
     Top = 8
     Width = 80
     Height = 16
@@ -32,8 +32,8 @@ object Scene1: _Scene
     WordWrap = True
   end
   object Label2: _Label
-    Left = 114
-    Top = 29
+    Left = 138
+    Top = 5
     Width = 102
     Height = 19
     Caption = 'Brake Light'
@@ -51,13 +51,13 @@ object Scene1: _Scene
     WordWrap = True
   end
   object Button1: _Button
-    Left = 0
+    Left = 40
     Top = 30
     Width = 75
     Height = 23
     Caption = 'AS Off'
     TabOrder = 0
-    SignalName = 'eufs_can2.VCU2AI_Status.AS_STATE'
+    SignalName = 'eufs_can1_Updating.VCU_status.AS_STATE'
     PushValue = '1'
     ReleaseValue = '1'
     UseSignalCycleTime = False
@@ -65,13 +65,13 @@ object Scene1: _Scene
     IsPaused = False
   end
   object Button2: _Button
-    Left = 0
+    Left = 40
     Top = 55
     Width = 75
     Height = 23
     Caption = 'AS Ready'
     TabOrder = 1
-    SignalName = 'eufs_can2.VCU2AI_Status.AS_STATE'
+    SignalName = 'eufs_can1_Updating.VCU_status.AS_STATE'
     PushValue = '2'
     ReleaseValue = '2'
     UseSignalCycleTime = False
@@ -79,13 +79,13 @@ object Scene1: _Scene
     IsPaused = False
   end
   object Button3: _Button
-    Left = 0
+    Left = 40
     Top = 80
     Width = 75
     Height = 23
     Caption = 'AS Driving'
     TabOrder = 2
-    SignalName = 'eufs_can2.VCU2AI_Status.AS_STATE'
+    SignalName = 'eufs_can1_Updating.VCU_status.AS_STATE'
     PushValue = '3'
     ReleaseValue = '3'
     UseSignalCycleTime = False
@@ -93,13 +93,13 @@ object Scene1: _Scene
     IsPaused = False
   end
   object Button4: _Button
-    Left = 0
+    Left = 40
     Top = 105
     Width = 75
     Height = 23
     Caption = 'AS Emergency'
     TabOrder = 3
-    SignalName = 'eufs_can2.VCU2AI_Status.AS_STATE'
+    SignalName = 'eufs_can1_Updating.VCU_status.AS_STATE'
     PushValue = '4'
     ReleaseValue = '4'
     UseSignalCycleTime = False
@@ -107,13 +107,13 @@ object Scene1: _Scene
     IsPaused = False
   end
   object Button5: _Button
-    Left = 0
+    Left = 40
     Top = 130
     Width = 75
     Height = 23
     Caption = 'AS Finished'
     TabOrder = 4
-    SignalName = 'eufs_can2.VCU2AI_Status.AS_STATE'
+    SignalName = 'eufs_can1_Updating.VCU_status.AS_STATE'
     PushValue = '5'
     ReleaseValue = '5'
     UseSignalCycleTime = False
@@ -121,13 +121,13 @@ object Scene1: _Scene
     IsPaused = False
   end
   object Button6: _Button
-    Left = 0
+    Left = 40
     Top = 155
     Width = 75
     Height = 23
     Caption = 'Manual Driving'
     TabOrder = 5
-    SignalName = 'eufs_can2.VCU2AI_Status.AS_STATE'
+    SignalName = 'eufs_can1_Updating.VCU_status.AS_STATE'
     PushValue = '6'
     ReleaseValue = '6'
     UseSignalCycleTime = False
@@ -135,22 +135,23 @@ object Scene1: _Scene
     IsPaused = False
   end
   object VerticalSlider1: _VerticalSlider
-    Left = 110
-    Top = 56
+    Left = 134
+    Top = 32
     Width = 104
     Height = 210
     UseSignalCycleTime = False
     CycleTime = 1000
     IsPaused = False
     SignalFeedback = True
-    SignalName = 'eufs_can2.APPS2VCU.Front_Brake_Line_Pressure'
+    SignalName = 'eufs_can1_Updating.APPS_Sensors.Front_Brake_line_pressure'
     ChangeLarge = 100
     ChangeSmall = 10
     SignalSettings.DigitalTo = 100000
     SignalSettings.Name1 = 'Front_Brake_Line_Pressure'
-    SignalSettings.Name2 = 'eufs_can2.APPS2VCU.Front_Brake_Line_Pressure'
+    SignalSettings.Name2 = 'eufs_can1_Updating.APPS_Sensors.Front_Brake_line_pressure'
     SignalSettings.ValueFormat = '##0'
     SignalSettings.ValueTo = 260.000000000000000000
+    SignalSettings.ValueUnit = 'bar'
     TabOrder = 6
     EnableMouseJump = False
     Font.Charset = DEFAULT_CHARSET
@@ -206,19 +207,5 @@ object Scene1: _Scene
     ScaleSettings.ValueFormat = '##0'
     ScaleSettings.ValueFormatLog = '0e-0'
     ScaleSettings.DecimalPlaces = 0
-  end
-  object Button7: _Button
-    Left = 430
-    Top = 173
-    Width = 75
-    Height = 23
-    Caption = 'AS_STATE'
-    TabOrder = 7
-    SignalName = 'eufs_can1.VCU2AI_status.AS_STATE'
-    PushValue = '2'
-    ReleaseValue = '2'
-    UseSignalCycleTime = True
-    CycleTime = 0
-    IsPaused = False
   end
 end

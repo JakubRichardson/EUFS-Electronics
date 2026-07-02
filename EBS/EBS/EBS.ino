@@ -1,14 +1,99 @@
+#include <Arduino.h>
+#include <FlexCAN_T4.h>
 #include <Fsm.h>
+#include <SPI.h>
 
 // Logging
 bool LOG_STATE = true;
 bool LOG_TIMEOUT = true;
+
+// EBS State Request
+enum EBS_Request {
+  REQ_OFF = 0,
+  REQ_ON = 1,
+  REQ_TEST = 2
+};
+EBS_Request requestedState = REQ_OFF;
+
+// EBS Status
+enum EBS_Status {
+  EBS_OFF = 0,
+  EBS_ON = 1,
+  EBS_ERROR = 2
+};
+EBS_Status ebsStatus = EBS_OFF;
+bool ebsTestComplete = false;
+
+// SDC
+bool sdcStatus = false;
+// TODO: implement
 
 // Pin definitions
 const int HEARTBEAT_PIN = 2;
 const int WD_reset  = 3;
 const int WD_status = 4;
 const int AS_close_SDC = 5;
+const int CAN_STBY = 6;
+const int EBS_enbl_rear = 7;
+const int EBS_enbl_front = 8;
+// Unused:
+const int SDC_IN_status = 19;
+const int SDC_OUT_status = 20;
+
+// BPS Variables
+unsigned long brakeLastSampleTime = 0; // millis
+const int BRAKE_SAMPLE_INTERVAL = 5; // 5ms = 200Hz
+const int BRAKE_SAMPLE_SIZE = 10;
+int brakeSamplesFront[BRAKE_SAMPLE_SIZE] = {0};
+int brakeSamplesRear[BRAKE_SAMPLE_SIZE] = {0};
+unsigned int brakeSampleIndex = 0;
+unsigned long brakeSumFront = 0;
+unsigned long brakeSumRear = 0;
+unsigned int brakeValFront = 0;
+unsigned int brakeValRear = 0;
+unsigned int brakeRawFront = 0;
+unsigned int brakeRawRear = 0;
+float brakePressureFront = 0.0; // Bar
+float brakePressureRear = 0.0; // Bar
+bool brakeErrorFlagFront = false;
+bool brakeErrorFlagRear = false;
+
+// APS Variables
+unsigned long airLastSampleTime = 0; // millis
+const int AIR_SAMPLE_INTERVAL = 5; // 5ms = 200Hz
+const int AIR_SAMPLE_SIZE = 10;
+int airSamplesFront[AIR_SAMPLE_SIZE] = {0};
+int airSamplesRear[AIR_SAMPLE_SIZE] = {0};
+unsigned int airSampleIndex = 0;
+unsigned long airSumFront = 0;
+unsigned long airSumRear = 0;
+unsigned int airValFront = 0;
+unsigned int airValRear = 0;
+float airPressureFront = 0.0; // Bar
+float airPressureRear = 0.0; // Bar
+bool airErrorFlagFront = false;
+bool airErrorFlagRear = false;
+
+// CAN Bus Variables
+FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> Can0;
+const int BAUD_RATE = 500000;
+static int const CAN_ID_STATUS = 0x050; // Status message
+static int const CAN_ID_SENSORS = 0x051; // Sensor Data
+const unsigned long CAN_MESSAGE_GAP = 1; // ms minimum gap
+const unsigned long STATUS_PERIOD = 100;
+const unsigned long SENSORS_PERIOD = 100;
+unsigned long lastCANMessageTime = 0;
+unsigned long lastStatusTime = 0;
+unsigned long lastSensorsTime = 0;
+
+// SPI Chip Selects
+const int NUM_OF_CHIP_SELECTS = 2;
+const int CHIP_SELECT_0 = 9;
+const int CHIP_SELECT_1 = 10;
+const int ALL_CHIP_SELECTS[NUM_OF_CHIP_SELECTS] = {
+  CHIP_SELECT_0,
+  CHIP_SELECT_1
+};
 
 // Watchdog Test
 bool watchdogTested = false;
@@ -44,6 +129,31 @@ State stateCloseSDC(&onEnterCloseSDC, NULL, NULL);
 State stateError(&onEnterError, NULL, NULL);
 Fsm fsm(&stateIdle);
 
+/**
+ * @brief Read the value using SPI
+ * 
+ * @param chipSelect The chip select
+ * @return unsigned int Value read
+ */
+unsigned int readChip(bool channel1, unsigned int chipSelect) {
+  // https://github.com/souviksaha97/MCP3202/blob/master/src/MCP3202.cpp#L48
+  unsigned int dataIn = 0;
+  unsigned int result = 0;
+  digitalWrite(chipSelect, LOW);
+  uint8_t dataOut = 0b00000001;
+  dataIn = SPI.transfer(dataOut);
+  int dataOutChannel0 = 0b10100000;
+  int dataOutChannel1 = 0b11100000;
+  dataOut = channel1 ? dataOutChannel1 : dataOutChannel0;
+  dataIn = SPI.transfer(dataOut);
+  result = dataIn & 0x0F;
+  dataIn = SPI.transfer(0x00);
+  result = result << 8;
+  result = result | dataIn;
+  digitalWrite(chipSelect, HIGH);
+  return result;
+}
+
 // Heartbeat update
 void updateHeartbeat() {
   unsigned long currentMillis = millis();
@@ -52,6 +162,194 @@ void updateHeartbeat() {
     heartbeatState = !heartbeatState;
     digitalWrite(HEARTBEAT_PIN, heartbeatState);
   }
+}
+
+//----------------
+// Brake Pressure
+//----------------
+const unsigned int BRAKE_MIN_SCS = (0.2/5.0) * 4095;
+const unsigned int BRAKE_MIN_VAL = (0.5/5.0) * 4095;
+const unsigned int BRAKE_MAX_VAL = (4.5/5.0) * 4095;
+const unsigned int BRAKE_MAX_SCS = (4.8/5.0) * 4095;
+
+// TODO: remove
+unsigned long lastDebugTime = 0;
+
+void readBrakes() {
+  // if (millis() - brakeLastSampleTime >= BRAKE_SAMPLE_INTERVAL) {
+    brakeLastSampleTime = millis();
+    // Read raw sensor value
+    brakeRawFront = readChip(false, CHIP_SELECT_0);
+    brakeRawRear = readChip(true, CHIP_SELECT_0);
+    // Remove oldest sample from sum
+    brakeSumFront -= brakeSamplesFront[brakeSampleIndex];
+    brakeSumRear -= brakeSamplesRear[brakeSampleIndex];
+    // Add new sample
+    brakeSamplesFront[brakeSampleIndex] = brakeRawFront;
+    brakeSamplesRear[brakeSampleIndex] = brakeRawRear;
+    brakeSumFront += brakeRawFront;
+    brakeSumRear += brakeRawRear;
+    // Advance buffer index
+    brakeSampleIndex = (brakeSampleIndex + 1) % BRAKE_SAMPLE_SIZE;
+    // Compute filtered value
+    brakeValFront = brakeSumFront / BRAKE_SAMPLE_SIZE;
+    brakeValRear = brakeSumRear / BRAKE_SAMPLE_SIZE;
+  // }
+}
+
+void checkBrakesSCS() {
+  brakeErrorFlagFront = false;
+  if (brakeValFront >= BRAKE_MAX_SCS) brakeErrorFlagFront = true;
+  if (brakeValFront >= BRAKE_MAX_VAL) brakeValFront = BRAKE_MAX_VAL;
+  if (brakeValFront <= BRAKE_MIN_SCS) brakeErrorFlagFront = true;
+  if (brakeValFront <= BRAKE_MIN_VAL) brakeValFront = BRAKE_MIN_VAL;
+  
+  brakeErrorFlagRear = false;
+  if (brakeValRear >= BRAKE_MAX_SCS) brakeErrorFlagRear = true;
+  if (brakeValRear >= BRAKE_MAX_VAL) brakeValRear = BRAKE_MAX_VAL;
+  if (brakeValRear <= BRAKE_MIN_SCS) brakeErrorFlagRear = true;
+  if (brakeValRear <= BRAKE_MIN_VAL) brakeValRear = BRAKE_MIN_VAL;
+
+  // TODO: remove
+  // if (millis() - lastDebugTime >= 1000) {
+  //   lastDebugTime = millis();
+  //   Serial.print("Front brake:");
+  //   Serial.println(brakeRawFront);
+  //   Serial.print("Rear Brake:");
+  //   Serial.println(brakeRawRear);
+  //   // Serial.print("Front error:");
+  //   // Serial.println(brakeErrorFlagFront);
+  //   // Serial.print("Rear error:");
+  //   // Serial.println(brakeErrorFlagRear);
+  // }
+}
+
+void calculateBrakePressure() {
+  // Calculate Brake Pressure
+  brakePressureFront = ((brakeValFront - BRAKE_MIN_VAL) * (5.0/4095) * 1000.0) / 28.57;
+  brakePressureRear = ((brakeValRear - BRAKE_MIN_VAL) * (5.0/4095) * 1000.0) / 28.57;
+  // Clamp final result
+  brakePressureFront = constrain(brakePressureFront, 0, 140);
+  brakePressureRear = constrain(brakePressureRear, 0, 140);
+}
+
+
+//----------------
+// Air Pressure
+//----------------
+const int AIR_MIN_SCS = (0.5/5.0) * 4095;
+const int AIR_MIN_VAL = (0.8/5.0) * 4095;
+const int AIR_MAX_VAL = (4.0/5.0) * 4095;
+const int AIR_MAX_SCS = (4.5/5.0) * 4095;
+
+void readAir() {
+  // if (millis() - airLastSampleTime >= AIR_SAMPLE_INTERVAL) {
+    airLastSampleTime = millis();
+    // Read raw sensor value
+    int airRawFront = readChip(false, CHIP_SELECT_1);
+    int airRawRear = readChip(true, CHIP_SELECT_1);
+    // Remove oldest sample from sum
+    airSumFront -= airSamplesFront[airSampleIndex];
+    airSumRear -= airSamplesRear[airSampleIndex];
+    // Add new sample
+    airSamplesFront[airSampleIndex] = airRawFront;
+    airSamplesRear[airSampleIndex] = airRawRear;
+    airSumFront += airRawFront;
+    airSumRear += airRawRear;
+    // Advance buffer index
+    airSampleIndex = (airSampleIndex + 1) % AIR_SAMPLE_SIZE;
+    // Compute filtered value
+    airValFront = airSumFront / AIR_SAMPLE_SIZE;
+    airValRear = airSumRear / AIR_SAMPLE_SIZE;
+  // }
+  // if (millis() - lastDebugTime >= 1000) {
+  //   lastDebugTime = millis();
+  //   Serial.print("Front Air:");
+  //   Serial.println(airRawFront);
+  //   Serial.print("Rear Air:");
+  //   Serial.println(airRawRear);
+  //   // Serial.print("Front error:");
+  //   // Serial.println(brakeErrorFlagFront);
+  //   // Serial.print("Rear error:");
+  //   // Serial.println(brakeErrorFlagRear);
+  // }
+}
+
+void checkAirSCS() {
+  airErrorFlagFront = false;
+  if (airValFront >= AIR_MAX_SCS) airErrorFlagFront = true;
+  if (airValFront >= AIR_MAX_VAL) airValFront = AIR_MAX_VAL;
+  if (airValFront <= AIR_MIN_SCS) airErrorFlagFront = true;
+  if (airValFront <= AIR_MIN_VAL) airValFront = AIR_MIN_VAL;
+  
+  airErrorFlagRear = false;
+  if (airValRear >= AIR_MAX_SCS) airErrorFlagRear = true;
+  if (airValRear >= AIR_MAX_VAL) airValRear = AIR_MAX_VAL;
+  if (airValRear <= AIR_MIN_SCS) airErrorFlagRear = true;
+  if (airValRear <= AIR_MIN_VAL) airValRear = AIR_MIN_VAL;
+}
+
+void calculateAirPressure() {
+  // Calculate air Pressure
+  airPressureFront = ((airValFront - AIR_MIN_VAL) * (5.0/4095)) / 0.32;
+  airPressureRear = ((airValRear - AIR_MIN_VAL) * (5.0/4095)) / 0.32;
+  // Clamp final result
+  airPressureFront = constrain(airPressureFront, 0, 140);
+  airPressureRear = constrain(airPressureRear, 0, 140);
+}
+
+//----------------
+// CAN Messages
+//----------------
+
+void processCAN() {
+  unsigned long now = millis();
+  // Enforce gap between any two CAN messages
+  if (now - lastCANMessageTime < CAN_MESSAGE_GAP) {
+    return;
+  }
+
+  if ((now - lastStatusTime >= STATUS_PERIOD)) {
+    sendStatus();
+    lastStatusTime = now;
+    lastCANMessageTime = now;
+    return;
+  }
+
+  if ((now - lastSensorsTime >= SENSORS_PERIOD)) {
+    sendSensors();
+    lastSensorsTime = now;
+    lastCANMessageTime = now;
+    return;
+  }
+}
+
+void sendStatus() {
+  uint8_t data = 0;
+  data |= brakeErrorFlagFront;
+  data |= brakeErrorFlagRear << 1;
+  data |= airErrorFlagFront << 2;
+  data |= airErrorFlagRear << 3;
+  data |= sdcStatus << 4;
+  data |= ebsTestComplete << 5;
+  data |= ebsStatus << 6;
+
+  CAN_message_t msg;
+  msg.id = CAN_ID_STATUS;
+  msg.buf[0] = data;
+  msg.len = 1;
+  Can0.write(msg);
+}
+
+void sendSensors() {
+  CAN_message_t msg;
+  msg.id = CAN_ID_SENSORS;
+  msg.buf[0] = brakePressureFront;
+  msg.buf[1] = brakePressureRear;
+  msg.buf[2] = airPressureFront;
+  msg.buf[3] = airPressureRear;
+  msg.len = 4;
+  Can0.write(msg);
 }
 
 // --- FSM State Functions ---
@@ -171,14 +469,40 @@ void setupFSM() {
 // Setup
 void setup() {
   Serial.begin(115200);
+  // Setup Digital Pins
   pinMode(WD_status, INPUT);
   pinMode(WD_reset, OUTPUT);
   pinMode(AS_close_SDC, OUTPUT);
   pinMode(HEARTBEAT_PIN, OUTPUT);
+  pinMode(EBS_enbl_rear, OUTPUT);
+  pinMode(EBS_enbl_front, OUTPUT);
 
   digitalWrite(WD_reset, LOW);
   digitalWrite(AS_close_SDC, LOW);
   digitalWrite(HEARTBEAT_PIN, LOW);
+  digitalWrite(EBS_enbl_rear, LOW);
+  digitalWrite(EBS_enbl_front, LOW);
+
+  // Setup chip selects
+  for (int i = 0; i < NUM_OF_CHIP_SELECTS; i++) {
+    pinMode(ALL_CHIP_SELECTS[i], OUTPUT);
+    // LOW to select chip
+    digitalWrite(ALL_CHIP_SELECTS[i], HIGH);
+  }
+  // Setup SPI
+  SPI.begin();
+
+  // Initialise CAN
+  pinMode(CAN_STBY, OUTPUT);
+  digitalWrite(CAN_STBY, LOW); /* optional tranceiver enable pin */
+  Can0.begin();
+  Can0.setBaudRate(BAUD_RATE);
+  Can0.setMaxMB(16);
+  // TODO: setup mailboxes
+  // Can0.enableMBInterrupts(); // enables all mailboxes to be interrupt enabled
+  // Can0.setMBFilter(MB0, APPS_ID);
+  // Can0.onReceive(MB0, appsCallback);
+  Can0.mailboxStatus();
 
   // Setup State Machine
   setupFSM();
@@ -186,8 +510,26 @@ void setup() {
 
 // Loop
 void loop() {
-  if (runHeartbeat) {
-    updateHeartbeat();
+  // Brake Pressure
+  if (millis() - brakeLastSampleTime >= BRAKE_SAMPLE_INTERVAL) {
+    brakeLastSampleTime = millis();
+    readBrakes();
+    checkBrakesSCS();
+    calculateBrakePressure();
   }
+
+  // Air Pressure
+  if (millis() - airLastSampleTime >= AIR_SAMPLE_INTERVAL) {
+    airLastSampleTime = millis();
+    readAir();
+    checkAirSCS();
+    calculateAirPressure();
+  }
+
+  // Send CAN messages
+  processCAN();
+
+  // Run heartbeat for watchdog
+  if (runHeartbeat) updateHeartbeat();
   fsm.run_machine();
 }

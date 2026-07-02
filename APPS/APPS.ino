@@ -314,8 +314,8 @@ void readThrottle() {
   if (micros() - throttleLastSampleTime >= THROTTLE_SAMPLE_INTERVAL) {
     throttleLastSampleTime = micros();
     // Read raw sensor values
-    unsigned int throttle1Raw = readChip(false, CHIP_SELECT_1);
-    unsigned int throttle2Raw = readChip(true, CHIP_SELECT_1);
+    throttle1Raw = readChip(false, CHIP_SELECT_1);
+    throttle2Raw = readChip(true, CHIP_SELECT_1);
     // Remove oldest samples from the sum
     throttle1Sum -= throttle1Samples[throttleSampleIndex];
     throttle2Sum -= throttle2Samples[throttleSampleIndex];
@@ -329,8 +329,6 @@ void readThrottle() {
     // Compute filtered value
     throttle1Val = (unsigned int) throttle1Sum / THROTTLE_SAMPLE_SIZE;
     throttle2Val = (unsigned int) throttle2Sum / THROTTLE_SAMPLE_SIZE;
-    throttle1Raw = throttle1Val;
-    throttle2Raw = throttle2Val;
   }
 }
 
@@ -390,7 +388,7 @@ void readBrakes() {
   if (millis() - brakeLastSampleTime >= BRAKE_SAMPLE_INTERVAL) {
     brakeLastSampleTime = millis();
     // Read raw sensor value
-    int brakeRaw = readChip(false, CHIP_SELECT_0);
+    unsigned int brakeRaw = readChip(false, CHIP_SELECT_0);
     // Remove oldest sample from sum
     brakeSum -= brakeSamples[brakeSampleIndex];
     // Add new sample
