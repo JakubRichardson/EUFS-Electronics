@@ -5,9 +5,8 @@
 const bool LOG_STATE = false;
 
 // CAN IDs
-const int BRAKE_LIGHT_ID = 0x41; // APPS-Status
-const int EV_STATE_ID = 0x03; // EV-Status
-const int AS_STATE_ID = 0x54; // AI-Status
+const int BRAKE_LIGHT_ID = 0x044; // APPS-Status
+const int VCU_STATE_ID = 0x3EC; // VCU-Status
 
 // Pin definitions
 const int yellowPin1 = 3;
@@ -163,7 +162,7 @@ void brakeLight() {
 
 void updateBrakeLight(const CAN_message_t &msg) {
   if (msg.id == BRAKE_LIGHT_ID) {
-    uint16_t frontPressure = msg.buf[0] | (msg.buf[1] << 8);
+    uint16_t frontPressure = (msg.buf[0] | (msg.buf[1] << 8));
     if(frontPressure > brakePressureThreshold) {
       CURRENT_BRAKE_LIGHT_STATE = true;
     } else {
@@ -172,13 +171,10 @@ void updateBrakeLight(const CAN_message_t &msg) {
   }
 }
 
-void updateEvState(const CAN_message_t &msg) {
-  if (msg.id == EV_STATE_ID) {
-    EV_State NEW_EV_STATE = static_cast<EV_State>(msg.buf[0] & 0x0F);
-    if(LOG_STATE) {
-      Serial.print("EV_STATE: ");
-      Serial.println(NEW_EV_STATE);
-    }
+void updateVCUState(const CAN_message_t &msg) {
+  if (msg.id == VCU_STATE_ID) {
+    EV_State NEW_EV_STATE = static_cast<EV_State>(msg.buf[0] & 0x07);
+    AS_State NEW_AS_STATE = static_cast<AS_State>(msg.buf[0] & 0x1C);
     if (NEW_EV_STATE != CURRENT_EV_STATE) {
       if (LOG_STATE) {
         Serial.println(NEW_EV_STATE);
@@ -189,12 +185,6 @@ void updateEvState(const CAN_message_t &msg) {
         readyTrigger = true;
       }
     }
-  }
-}
-
-void updateAsState(const CAN_message_t &msg) {
-  if (msg.id == AS_STATE_ID) {
-    AS_State NEW_AS_STATE = static_cast<AS_State>(msg.buf[0] & 0x0F);
     if (NEW_AS_STATE != CURRENT_AS_STATE) {
       if (LOG_STATE) {
         Serial.println(NEW_AS_STATE);
@@ -237,10 +227,8 @@ void setup() {
   Can0.enableMBInterrupts(); // enables all mailboxes to be interrupt enabled
   Can0.setMBFilter(MB0, BRAKE_LIGHT_ID);
   Can0.onReceive(MB0, updateBrakeLight);
-  Can0.setMBFilter(MB1, EV_STATE_ID);
-  Can0.onReceive(MB1, updateEvState);
-  Can0.setMBFilter(MB2, AS_STATE_ID);
-  Can0.onReceive(MB2, updateAsState);
+  Can0.setMBFilter(MB1, VCU_STATE_ID);
+  Can0.onReceive(MB1, updateVCUState);
   Can0.mailboxStatus();
 }
 
