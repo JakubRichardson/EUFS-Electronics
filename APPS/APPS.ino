@@ -196,7 +196,6 @@ unsigned int readChip(bool channel1, unsigned int chipSelect) {
 
 void handleReceive() {
   if (CAN.available()) {
-    Serial.println("Received");
     CanMsg const msg = CAN.read();
     switch (msg.id) {
       // -------------------------
@@ -615,7 +614,6 @@ void logConsole() {
 
 void setup() {
   Serial.begin(115200);
-  while (!Serial) { }
   
   // Setup chip selects
   for (int i = 0; i < NUM_OF_CHIP_SELECTS; i++) {
