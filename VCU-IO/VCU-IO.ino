@@ -11,16 +11,18 @@ const int BAUD_RATE = 500000;
 
 // APPS Timeout Timer
 const uint32_t APPS_ID = 0x41;    // CAN ID to monitor APPS-Status
-const unsigned int BRAKE_THRESHOLD = 6; // bar
+const uint32_t BRAKES_ID = 0x44;    // CAN ID to monitor APPS-Status
+const unsigned int BRAKE_THRESHOLD = 3; // bar
 bool brakesEngagedFlag = false;
-const unsigned long TIMEOUT_MS = 100; // APPS Monitor - Timeout
+const unsigned long TIMEOUT_MS = 200; // APPS Monitor - Timeout
 bool appsGood = false;                // APPS flag
 unsigned long lastAppsMessageTime = 0;    // Timeout timer
 
 // CAN Messages
 const uint32_t Inv_rcv = 0x181;
 const uint32_t Inv_snd = 0x201;
-const uint32_t VCU_State = 0x3;
+const uint32_t VCU_State = 0x3EC;
+const int VCUIO2VCU_Buttons = 0x3EB; // 1003
 
 // Pins
 const int CAN_BUS_STBY = 6;
@@ -30,19 +32,54 @@ int DIG_OUT_5V[8] = {0, 1, 2, 3, 4, 5, 7, 8};      // 5V Digital Outputs
 int DIG_OUT_24V[2] = {9, 10};                      // 24V Digital Outputs
 
 // Input signals:
-const int R2D_BUTTON = DIG_INP[0]; // R2D button input pin
-const int TSMS = DIG_INP[4];       // TSMS - 24V input
-int buttonState;                   // current button reading
-int lastButtonState = LOW;         // previous button reading
-// Timers:
-// the following variables are unsigned longs because the time, measured in
-// milliseconds, will quickly become a bigger number than can be stored in an int.
-unsigned long lastDebounceTime = 0;      // the last time the output pin was toggled
-const unsigned long DEBOUNCE_DELAY = 20; // the debounce time; increase if the output flickers
+const int TS_ACTIVATION_SIDE = DIG_INP[0];
+const int TS_ACTIVATION_DASH = DIG_INP[1];
+const int R2D_BUTTON = DIG_INP[2];
+const int ASMS_SWITCH = DIG_INP[3];
+
+const int WS_RR_PIN = DIG_INP[4];
+const int WS_RL_PIN = DIG_INP[5];
+
+const int TS_ACTIVATION_OUT = DIG_OUT_5V[0];
+
+// Button debounce (active LOW; same timing as R2D)
+int buttonState;
+int lastButtonState = LOW;
+unsigned long lastDebounceTime = 0;
+
+int dashButtonState;
+int dashLastButtonState = LOW;
+unsigned long dashLastDebounceTime = 0;
+
+int sideButtonState;
+int sideLastButtonState = LOW;
+unsigned long sideLastDebounceTime = 0;
+
+const unsigned long DEBOUNCE_DELAY = 20;
+
+// =====================
+// STATE VARIABLES
+// =====================
+
+bool r2dPressed = false;
+bool r2dHeld = false;
+bool dashPressed = false;
+bool dashHeld = false; // TODO: Check needed
+bool sidePressed = false;
+bool sideHeld = false;
+bool asmsState = false;
+bool tsActivation = false;
+unsigned long r2dHoldUntilMs = 0;
+unsigned long dashHoldUntilMs = 0;
+unsigned long sideHoldUntilMs = 0;
+
+// RES receiver: last time we saw TPDO1 (0x191) or we acted on boot / sent NMT (for first-frame timeout)
+unsigned long lastResActivityMs = 0;
 
 // RES Messages
 const int RES_PDO = 0x191;
 bool resReceiving = false;
+const unsigned long R2D_HOLD_MS = 400;
 
 // Inverter RFE Message
 bool RFE = false;
@@ -55,14 +92,23 @@ const int RDY = 0xE2;
 unsigned long lastEnableSendTime = 0;        // the last time enable was sent to the inverter
 const unsigned long ENABLE_CYCLE_TIME = 100; // time (ms) between sending enable messages
 const int INV_ENBL_ID = 0x51;                // TODO
-const unsigned int INV_ENBL_MSG = 8;
-const unsigned int INV_DISBL_MSG = 12;
+const unsigned int INV_ENBL_MSG = 64;
+const unsigned int INV_DISBL_MSG = 4;
 bool invDriveEnabled = false;
 
 unsigned long lastRequestTime = 0;
 const unsigned long REQUEST_CYCLE_TIME = 100;
 bool invReceivingRun = false;
 bool invReceivingEnbl = false;
+
+int lastTxUs = 0;
+unsigned long lastButtonsCanTxMs = 0;
+int lastButtonsCanData = 0;
+bool hasLastButtonsCanData = false;
+bool lastR2dHeldDebug = false;
+bool lastTsActivationDebug = false;
+bool lastAsmsStateDebug = false;
+unsigned long lastWheelSerialMs = 0;
 
 // State definitions implemented as enum: B000 = OFF, B001 = ACTIVE, B010 = MANUAL, B111 = CORSA
 typedef enum : uint8_t { 
@@ -94,7 +140,8 @@ void heartBeat() {
   CAN_message_t msg;
   msg.id = VCU_State;
   msg.buf[0] = CURRENT_STATE;
-  msg.len = 1;
+  msg.buf[1] = 0;
+  msg.len = 2;
   Can0.write(msg);
 }
 
@@ -130,7 +177,12 @@ void checkFlag() {
 void appsCallback(const CAN_message_t &msg) {
   if (msg.id == APPS_ID) {
     lastAppsMessageTime = millis();
-    appsGood = !(msg.buf[5] & 0x04);
+    appsGood = !(msg.buf[1] & 0x04);
+  }
+}
+
+void brakesCallback(const CAN_message_t &msg) {
+  if (msg.id == BRAKES_ID) {
     unsigned int frontBrakePressure = ((msg.buf[1] << 8) | msg.buf[0]);
     brakesEngagedFlag = (frontBrakePressure >= BRAKE_THRESHOLD);
   }
@@ -153,10 +205,6 @@ void handleReceive(const CAN_message_t &msg) {
       } else {
         invDriveEnabled = false;
       }
-    }
-  } else if (msg.id == RES_PDO) {
-    if (!resReceiving) {
-      resReceiving = true;
     }
   }
 }
@@ -229,14 +277,14 @@ void onEnterTractiveSystemActive() {
   CURRENT_STATE = TS_ACTIVE;
 }
 
+unsigned long lastDebug = false;
 void duringTractiveSystemActive() {
   // 1. Read RFE. If goes low go to TS-Off
   if (!RFE) {
     fsm.trigger(TS_DEACTIVATION_EVENT);
   }
   // 2. Read button. If pressed go to Manual Driving
-  bool pressed = buttonPressed();
-  if (pressed && brakesEngagedFlag) {
+  if (r2dHeld && brakesEngagedFlag) {
     fsm.trigger(R2D_BUTTON_EVENT);
   }
   // 3. Send Inverter Disable
@@ -249,6 +297,10 @@ void onEnterManualDriving() {
   }
   CURRENT_STATE = MANUAL;
   lastAppsMessageTime = millis();
+  enableInverter(true);
+  delay(1);
+  enableInverter(false);
+  delay(1);
 }
 
 void duringManualDriving() {
@@ -261,10 +313,9 @@ void duringManualDriving() {
     fsm.trigger(TS_DEACTIVATION_EVENT);
   }
   // 2. Read button. If pressed go to TS-Active
-  bool pressed = buttonPressed();
-  if (pressed) {
+  if (r2dPressed) {
     Serial.print("Button: ");
-    Serial.println(pressed);
+    Serial.println(r2dPressed);
     fsm.trigger(R2D_BUTTON_EVENT);
   }
   // 3. Check APPS flags. If implausible or not receiving -> deactivate drive
@@ -276,6 +327,76 @@ void duringManualDriving() {
   }
   // 4. Send Inverter Enable
   enableInverter(true);
+}
+
+void sendButtonsCANIfNeeded() {
+  if (millis() - lastButtonsCanTxMs > 100) {
+    uint8_t data = buildButtonsCanData();
+    sendButtonsCAN(data);
+    lastButtonsCanTxMs = millis();
+  }
+}
+
+// Returns debounced active-low level. If edgeToLowOut != nullptr, sets *edgeToLowOut
+// true for one call when the stable state transitions to LOW (R2D pulse semantics).
+bool updateDebouncedActiveLow(int pin, int &stableState, int &lastReading,
+                              unsigned long &lastDebounceMs, bool *edgeToLowOut) {
+  if (edgeToLowOut) {
+    *edgeToLowOut = false;
+  }
+
+  int reading = digitalRead(pin);
+
+  if (reading != lastReading) {
+    lastDebounceMs = millis();
+  }
+
+  if ((millis() - lastDebounceMs) > DEBOUNCE_DELAY) {
+    if (reading != stableState) {
+      stableState = reading;
+      if (stableState == LOW && edgeToLowOut) {
+        *edgeToLowOut = true;
+      }
+    }
+  }
+
+  lastReading = reading;
+  return stableState == LOW;
+}
+
+bool readActiveLowButtonEdge(int pin, int &stableState, int &lastReading,
+                             unsigned long &lastDebounceMs) {
+  bool edge = false;
+  updateDebouncedActiveLow(pin, stableState, lastReading, lastDebounceMs, &edge);
+  return edge;
+}
+
+bool updateHeldHighFromEdge(bool edgeToHigh, unsigned long holdMs, unsigned long &holdUntilMs) {
+  unsigned long nowMs = millis();
+  if (edgeToHigh) {
+    holdUntilMs = nowMs + holdMs;
+    return true;
+  }
+  return (long)(holdUntilMs - nowMs) > 0;
+}
+
+int buildButtonsCanData() {
+  int data = 0;
+  // ASMS → bit 0
+  data |= (asmsState & 0x01) << 0;
+  // Combined TS activation output (from dash/side selection logic) → bit 1
+  data |= (tsActivation & 0x01) << 1;
+  // R2D → bit 2
+  data |= (r2dHeld & 0x01) << 2;
+  return data;
+}
+
+void sendButtonsCAN(uint8_t data) {
+  CAN_message_t msg;
+  msg.id = VCUIO2VCU_Buttons;
+  msg.len = 1;
+  msg.buf[0] = data;
+  Can0.write(msg);
 }
 
 void setupFSM() {
@@ -325,6 +446,8 @@ void setup() {
   Can0.onReceive(MB0, appsCallback);
   Can0.setMBFilter(MB1, Inv_rcv);
   Can0.onReceive(MB1, handleReceive);
+  Can0.setMBFilter(MB2, BRAKES_ID);
+  Can0.onReceive(MB2, brakesCallback);
   Can0.mailboxStatus();
 
   // Setup State Machine
@@ -338,7 +461,40 @@ void loop() {
     lastRequestTime = millis();
     if(!invReceivingRun) inverterRequest(RUN_ID);
     if(!invReceivingEnbl) inverterRequest(INV_ENBL_ID);
-    if(!resReceiving) resRequest();
+    // if(!resReceiving) resRequest();
   }
   heartBeat(); // Send status heartbeat
+
+  // Read inputs
+  r2dPressed = 
+    readActiveLowButtonEdge(R2D_BUTTON, buttonState, lastButtonState, lastDebounceTime);
+  r2dHeld = updateHeldHighFromEdge(r2dPressed, R2D_HOLD_MS, r2dHoldUntilMs);
+  dashPressed =
+    readActiveLowButtonEdge(TS_ACTIVATION_DASH, dashButtonState, dashLastButtonState,
+                            dashLastDebounceTime);
+  dashHeld = updateHeldHighFromEdge(dashPressed, R2D_HOLD_MS, dashHoldUntilMs);
+  sidePressed =
+    readActiveLowButtonEdge(TS_ACTIVATION_SIDE, sideButtonState, sideLastButtonState,
+                            sideLastDebounceTime);
+  sideHeld = updateHeldHighFromEdge(sidePressed, R2D_HOLD_MS, sideHoldUntilMs);
+  asmsState = digitalRead(ASMS_SWITCH);
+
+  // =====================
+  // TS Activation Logic (mux; pulse one loop per press, same as R2D-style edges)
+  // =====================
+
+  if (!asmsState) {
+    tsActivation = dashHeld;
+  } else {
+    tsActivation = sideHeld;
+  }
+
+  // Output
+  digitalWrite(TS_ACTIVATION_OUT, tsActivation);
+
+  // =====================
+  // CAN TX
+  // =====================
+
+  sendButtonsCANIfNeeded();
 }
