@@ -202,7 +202,7 @@ void handleReceive() {
       // VCU heartbeat / state
       // -------------------------
       case CAN_ID_VCU_STATUS:
-        currentState = static_cast<EVState>(msg.data[0]);
+        currentState = static_cast<EVState>(msg.data[0] & 0x07);
         lastHeartbeatTime = millis();
         break;
       // -------------------------
