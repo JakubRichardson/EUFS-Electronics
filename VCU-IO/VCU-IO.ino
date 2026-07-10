@@ -32,9 +32,12 @@ bool resReceiving = false;
 // CAN
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> Can0;
 const int CAN_BAUDRATE = 500000;
+const unsigned long CAN_MESSAGE_GAP = 1; // ms minimum gap
+unsigned long lastCANMessageTime = 0;
 
 // CAN IDs (application)
-const int VCUIO2VCU_Buttons = 0x3EB; // 1003
+const int VCUIO2VCU_Buttons = 0x3EB;
+const int VCUIO_Wheel_Speeds = 0x042;
 
 // Pins
 const int CAN_BUS_STBY = 6;
@@ -68,6 +71,8 @@ unsigned long sideLastDebounceTime = 0;
 
 const unsigned long DEBOUNCE_DELAY = 20;
 const unsigned long R2D_HOLD_MS = 400;
+const unsigned int BUTTONS_PERIOD = 100;
+const unsigned int WHEEL_SPEED_PERIOD = 100;
 
 // =====================
 // STATE VARIABLES
@@ -85,6 +90,7 @@ unsigned long r2dHoldUntilMs = 0;
 unsigned long dashHoldUntilMs = 0;
 unsigned long sideHoldUntilMs = 0;
 unsigned long lastButtonsCanTxMs = 0;
+unsigned long lastWheelsCanTxMs = 0;
 
 // =====================
 // FUNCTIONS
@@ -165,7 +171,6 @@ bool updateDebouncedActiveLow(int pin, int &stableState, int &lastReading,
   }
 
   int reading = digitalRead(pin);
-
   if (reading != lastReading) {
     lastDebounceMs = millis();
   }
@@ -279,6 +284,56 @@ static inline void updateWheelSpeed(volatile WheelState &w) {
   interrupts();
 }
 
+void sendWheelspeeds() {
+  unsigned int rlRPM_x10;
+  unsigned int rrRPM_x10;
+  // Copy safely from interrupt variables
+  noInterrupts();
+  rlRPM_x10 = rlState.rpm_x10;
+  rrRPM_x10 = rrState.rpm_x10;
+  interrupts();
+  // Split into CAN bytes
+  uint8_t rlLow = rlRPM_x10 & 0xFF;
+  uint8_t rlHigh = (rlRPM_x10 >> 8) & 0xFF;
+  uint8_t rrLow = rrRPM_x10 & 0xFF;
+  uint8_t rrHigh = (rrRPM_x10 >> 8) & 0xFF;
+  
+  CAN_message_t msg;
+  msg.id = VCUIO_Wheel_Speeds;
+  msg.len = 4;
+  msg.buf[0] = rlLow;
+  msg.buf[1] = rlHigh;
+  msg.buf[2] = rrLow;
+  msg.buf[3] = rrHigh;
+  Can0.write(msg);
+}
+
+// =====================
+// CAN
+// =====================
+
+void processCAN() {
+  unsigned long now = millis();
+  // Enforce gap between any two CAN messages
+  if (now - lastCANMessageTime < CAN_MESSAGE_GAP) {
+    return;
+  }
+
+  if (now - lastButtonsCanTxMs >= BUTTONS_PERIOD) {
+    sendButtonsCAN();
+    lastButtonsCanTxMs = now;
+    lastCANMessageTime = now;
+    return;
+  }
+
+  if (now - lastWheelsCanTxMs >= WHEEL_SPEED_PERIOD) {
+    sendWheelspeeds();
+    lastWheelsCanTxMs = now;
+    lastCANMessageTime = now;
+    return;
+  }
+}
+
 // =====================
 // SETUP
 // =====================
@@ -356,8 +411,5 @@ void loop() {
   // =====================
   // CAN TX
   // =====================
-  if (millis() - lastButtonsCanTxMs > 100) {
-    lastButtonsCanTxMs = millis();
-    sendButtonsCAN();
-  }
+  processCAN();
 }
