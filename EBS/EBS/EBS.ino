@@ -3,6 +3,8 @@
 #include <Fsm.h>
 #include <SPI.h>
 
+// Note: Air Pressure sensors not working correctly, so code was modified to accomodate this
+
 // Logging
 bool LOG_STATE = true;
 bool LOG_TIMEOUT = true;
@@ -26,7 +28,6 @@ bool ebsTestComplete = false;
 
 // SDC
 bool sdcStatus = false;
-// TODO: implement
 
 // Pin definitions
 const int HEARTBEAT_PIN = 2;
@@ -36,11 +37,12 @@ const int AS_close_SDC = 5;
 const int CAN_STBY = 6;
 const int EBS_enbl_rear = 7;
 const int EBS_enbl_front = 8;
-// Unused:
 const int SDC_IN_status = 19;
 const int SDC_OUT_status = 20;
 
 // BPS Variables
+const float BRAKE_THRESHOLD_DISENGAGED = 1.0; // Bar
+const float BRAKE_THRESHOLD_ENGAGED = 20.0; // Bar
 unsigned long brakeLastSampleTime = 0; // millis
 const int BRAKE_SAMPLE_INTERVAL = 5; // 5ms = 200Hz
 const int BRAKE_SAMPLE_SIZE = 10;
@@ -59,6 +61,7 @@ bool brakeErrorFlagFront = false;
 bool brakeErrorFlagRear = false;
 
 // APS Variables
+const int AIR_THRESHOLD_MIN = 2; // Bar
 unsigned long airLastSampleTime = 0; // millis
 const int AIR_SAMPLE_INTERVAL = 5; // 5ms = 200Hz
 const int AIR_SAMPLE_SIZE = 10;
@@ -77,6 +80,7 @@ bool airErrorFlagRear = false;
 // CAN Bus Variables
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> Can0;
 const int BAUD_RATE = 500000;
+static int const CAN_ID_VCU_STATUS = 0x3EC; // VCU Status
 static int const CAN_ID_STATUS = 0x050; // Status message
 static int const CAN_ID_SENSORS = 0x051; // Sensor Data
 const unsigned long CAN_MESSAGE_GAP = 1; // ms minimum gap
@@ -114,19 +118,33 @@ const unsigned long pulseWidth = 2;   // ms pulse high time
 const unsigned long settleTime = 8;   // ms after LOW before transition
 
 // Events
-#define START_HEARTBEAT 0
-#define VERIFY_HEARTBEAT 1
-#define TEST_HEARTBEAT 2
-#define CLOSE_SDC 3
-#define WD_ERROR 4
+#define ERROR 0
+#define START_HEARTBEAT 1
+#define VERIFY_HEARTBEAT 2
+#define TEST_HEARTBEAT 3
+#define CLOSE_SDC 4
+#define CHECK_PRESSURE 5
+#define DEACTIVATE_REAR 6
+#define REACTIVATE_REAR 7
+#define DEACTIVATE_FRONT 8
+#define REACTIVATE_FRONT 9
+#define DRIVING 10
+#define RESET 11
 
 // FSM States
+State stateError(&onEnterError, &duringError, NULL);
 State stateIdle(&onEnterIdle, &duringIdle, NULL);
 State stateStartHeartbeat(&onEnterStartHeartbeat, &duringStartHeartbeat, NULL);
 State stateCheckStatus(&onEnterCheckStatus, &duringCheckStatus, NULL);
 State stateTestWatchdog(&onEnterTestWatchdog, &duringTestWatchdog, NULL);
-State stateCloseSDC(&onEnterCloseSDC, NULL, NULL);
-State stateError(&onEnterError, NULL, NULL);
+State stateCloseSDC(&onEnterCloseSDC, &duringCloseSDC, NULL);
+State stateCheckPressure(&onEnterCheckPressure, &duringCheckPressure, NULL);
+State stateDeactivateRear(&onEnterDeactivateRear, &duringDeactivateRear, NULL);
+State stateReactivateRear(&onEnterReactivateRear, &duringReactivateRear, NULL);
+State stateDeactivateFront(&onEnterDeactivateFront, &duringDeactivateFront, NULL);
+State stateReactivateFront(&onEnterReactivateFront, &duringReactivateFront, NULL);
+State stateDeactivateEBS(&onEnterDeactivateEBS, NULL, NULL);
+State stateMonitoring(&onEnterMonitoring, &duringMonitoring, NULL);
 Fsm fsm(&stateIdle);
 
 /**
@@ -172,29 +190,24 @@ const unsigned int BRAKE_MIN_VAL = (0.5/5.0) * 4095;
 const unsigned int BRAKE_MAX_VAL = (4.5/5.0) * 4095;
 const unsigned int BRAKE_MAX_SCS = (4.8/5.0) * 4095;
 
-// TODO: remove
-unsigned long lastDebugTime = 0;
-
 void readBrakes() {
-  // if (millis() - brakeLastSampleTime >= BRAKE_SAMPLE_INTERVAL) {
-    brakeLastSampleTime = millis();
-    // Read raw sensor value
-    brakeRawFront = readChip(false, CHIP_SELECT_0);
-    brakeRawRear = readChip(true, CHIP_SELECT_0);
-    // Remove oldest sample from sum
-    brakeSumFront -= brakeSamplesFront[brakeSampleIndex];
-    brakeSumRear -= brakeSamplesRear[brakeSampleIndex];
-    // Add new sample
-    brakeSamplesFront[brakeSampleIndex] = brakeRawFront;
-    brakeSamplesRear[brakeSampleIndex] = brakeRawRear;
-    brakeSumFront += brakeRawFront;
-    brakeSumRear += brakeRawRear;
-    // Advance buffer index
-    brakeSampleIndex = (brakeSampleIndex + 1) % BRAKE_SAMPLE_SIZE;
-    // Compute filtered value
-    brakeValFront = brakeSumFront / BRAKE_SAMPLE_SIZE;
-    brakeValRear = brakeSumRear / BRAKE_SAMPLE_SIZE;
-  // }
+  brakeLastSampleTime = millis();
+  // Read raw sensor value
+  brakeRawFront = readChip(true, CHIP_SELECT_0);
+  brakeRawRear = readChip(false, CHIP_SELECT_0);
+  // Remove oldest sample from sum
+  brakeSumFront -= brakeSamplesFront[brakeSampleIndex];
+  brakeSumRear -= brakeSamplesRear[brakeSampleIndex];
+  // Add new sample
+  brakeSamplesFront[brakeSampleIndex] = brakeRawFront;
+  brakeSamplesRear[brakeSampleIndex] = brakeRawRear;
+  brakeSumFront += brakeRawFront;
+  brakeSumRear += brakeRawRear;
+  // Advance buffer index
+  brakeSampleIndex = (brakeSampleIndex + 1) % BRAKE_SAMPLE_SIZE;
+  // Compute filtered value
+  brakeValFront = brakeSumFront / BRAKE_SAMPLE_SIZE;
+  brakeValRear = brakeSumRear / BRAKE_SAMPLE_SIZE;
 }
 
 void checkBrakesSCS() {
@@ -209,19 +222,6 @@ void checkBrakesSCS() {
   if (brakeValRear >= BRAKE_MAX_VAL) brakeValRear = BRAKE_MAX_VAL;
   if (brakeValRear <= BRAKE_MIN_SCS) brakeErrorFlagRear = true;
   if (brakeValRear <= BRAKE_MIN_VAL) brakeValRear = BRAKE_MIN_VAL;
-
-  // TODO: remove
-  // if (millis() - lastDebugTime >= 1000) {
-  //   lastDebugTime = millis();
-  //   Serial.print("Front brake:");
-  //   Serial.println(brakeRawFront);
-  //   Serial.print("Rear Brake:");
-  //   Serial.println(brakeRawRear);
-  //   // Serial.print("Front error:");
-  //   // Serial.println(brakeErrorFlagFront);
-  //   // Serial.print("Rear error:");
-  //   // Serial.println(brakeErrorFlagRear);
-  // }
 }
 
 void calculateBrakePressure() {
@@ -237,42 +237,29 @@ void calculateBrakePressure() {
 //----------------
 // Air Pressure
 //----------------
-const int AIR_MIN_SCS = (0.5/5.0) * 4095;
+const int AIR_MIN_SCS = (0.4/5.0) * 4095;
 const int AIR_MIN_VAL = (0.8/5.0) * 4095;
 const int AIR_MAX_VAL = (4.0/5.0) * 4095;
-const int AIR_MAX_SCS = (4.5/5.0) * 4095;
+const int AIR_MAX_SCS = (4.6/5.0) * 4095;
 
 void readAir() {
-  // if (millis() - airLastSampleTime >= AIR_SAMPLE_INTERVAL) {
-    airLastSampleTime = millis();
-    // Read raw sensor value
-    int airRawFront = readChip(false, CHIP_SELECT_1);
-    int airRawRear = readChip(true, CHIP_SELECT_1);
-    // Remove oldest sample from sum
-    airSumFront -= airSamplesFront[airSampleIndex];
-    airSumRear -= airSamplesRear[airSampleIndex];
-    // Add new sample
-    airSamplesFront[airSampleIndex] = airRawFront;
-    airSamplesRear[airSampleIndex] = airRawRear;
-    airSumFront += airRawFront;
-    airSumRear += airRawRear;
-    // Advance buffer index
-    airSampleIndex = (airSampleIndex + 1) % AIR_SAMPLE_SIZE;
-    // Compute filtered value
-    airValFront = airSumFront / AIR_SAMPLE_SIZE;
-    airValRear = airSumRear / AIR_SAMPLE_SIZE;
-  // }
-  // if (millis() - lastDebugTime >= 1000) {
-  //   lastDebugTime = millis();
-  //   Serial.print("Front Air:");
-  //   Serial.println(airRawFront);
-  //   Serial.print("Rear Air:");
-  //   Serial.println(airRawRear);
-  //   // Serial.print("Front error:");
-  //   // Serial.println(brakeErrorFlagFront);
-  //   // Serial.print("Rear error:");
-  //   // Serial.println(brakeErrorFlagRear);
-  // }
+  airLastSampleTime = millis();
+  // Read raw sensor value
+  int airRawFront = readChip(false, CHIP_SELECT_1);
+  int airRawRear = readChip(true, CHIP_SELECT_1);
+  // Remove oldest sample from sum
+  airSumFront -= airSamplesFront[airSampleIndex];
+  airSumRear -= airSamplesRear[airSampleIndex];
+  // Add new sample
+  airSamplesFront[airSampleIndex] = airRawFront;
+  airSamplesRear[airSampleIndex] = airRawRear;
+  airSumFront += airRawFront;
+  airSumRear += airRawRear;
+  // Advance buffer index
+  airSampleIndex = (airSampleIndex + 1) % AIR_SAMPLE_SIZE;
+  // Compute filtered value
+  airValFront = airSumFront / AIR_SAMPLE_SIZE;
+  airValRear = airSumRear / AIR_SAMPLE_SIZE;
 }
 
 void checkAirSCS() {
@@ -410,7 +397,7 @@ void duringCheckStatus() {
   } else if (watchdogTested && digitalRead(WD_status) == HIGH) {
     fsm.trigger(CLOSE_SDC);
   } else {
-    fsm.trigger(WD_ERROR);
+    fsm.trigger(ERROR);
   }
 }
 
@@ -432,22 +419,132 @@ void duringTestWatchdog() {
     fsm.trigger(START_HEARTBEAT);
   }
   // Watchdog Taking too long -> Error
-  if (watchdogTimeoutDelay <= MAX_WATCHDOG_DELAY) {
-    fsm.trigger(WD_ERROR);
+  if (watchdogTimeoutDelay >= MAX_WATCHDOG_DELAY) {
+    fsm.trigger(ERROR);
   }
 }
 
 // Close SDC
 void onEnterCloseSDC() {
   if (LOG_STATE) Serial.println("Close SDC");
+  ebsTestComplete = false; // Reset EBS test
   digitalWrite(AS_close_SDC, HIGH);
+}
+
+void duringCloseSDC() {
+  if (requestedState == REQ_TEST) fsm.trigger(CHECK_PRESSURE);
+}
+
+// Check EBS Pressures
+void onEnterCheckPressure() {
+  if (LOG_STATE) Serial.println("Check Pressure");
+}
+
+void duringCheckPressure() {
+  if ((brakePressureRear >= BRAKE_THRESHOLD_ENGAGED) && 
+      (brakePressureFront >= BRAKE_THRESHOLD_ENGAGED)) {
+    fsm.trigger(DEACTIVATE_REAR);
+  }
+}
+
+// Deactivate Rear EBS
+void onEnterDeactivateRear() {
+  if (LOG_STATE) Serial.println("Deactivate Rear EBS");
+}
+
+void duringDeactivateRear() {
+  digitalWrite(EBS_enbl_rear, HIGH); // Deactivate EBS
+
+  // Check no brake pressure
+  if (brakePressureRear <= BRAKE_THRESHOLD_DISENGAGED) fsm.trigger(REACTIVATE_REAR); 
+}
+
+// Reactivate Rear EBS
+void onEnterReactivateRear() {
+  if (LOG_STATE) Serial.println("Reactivate Rear EBS");
+}
+
+void duringReactivateRear() {
+  digitalWrite(EBS_enbl_rear, LOW); // Reactivate EBS
+
+  // Check brakes locked
+  if (brakePressureRear >= BRAKE_THRESHOLD_ENGAGED) fsm.trigger(DEACTIVATE_FRONT); 
+}
+
+// Deactivate Front EBS
+void onEnterDeactivateFront() {
+  if (LOG_STATE) Serial.println("Deactivate Front EBS");
+}
+
+void duringDeactivateFront() {
+  digitalWrite(EBS_enbl_front, HIGH); // Deactivate EBS
+
+  // Check no brake pressure
+  if (brakePressureFront <= BRAKE_THRESHOLD_DISENGAGED) fsm.trigger(REACTIVATE_FRONT); 
+}
+
+// Reactivate Front EBS
+void onEnterReactivateFront() {
+  if (LOG_STATE) Serial.println("Reactivate Front EBS");
+}
+
+void duringReactivateFront() {
+  digitalWrite(EBS_enbl_front, LOW); // Reactivate EBS
+
+  // Check brakes locked
+  if (brakePressureFront >= BRAKE_THRESHOLD_ENGAGED) {
+    ebsTestComplete = true;
+  }
+  if (requestedState == REQ_OFF) {
+    fsm.trigger(DRIVING);
+  }
+}
+
+// Deactivate EBS
+void onEnterDeactivateEBS() {
+  digitalWrite(EBS_enbl_rear, HIGH); // Deactivate EBS
+  digitalWrite(EBS_enbl_front, HIGH); // Deactivate EBS
+}
+
+// Continuous Monitoring
+void onEnterMonitoring() {
+  if (LOG_STATE) Serial.println("Monitoring");
+}
+
+void duringMonitoring() {
+  // if (airPressureFront <= AIR_THRESHOLD_MIN) {
+  //   // TODO: Add Error code
+  //   if (LOG_STATE) {
+  //     Serial.print("Front Air Pressure: ");
+  //     Serial.println(airPressureFront);
+  //   }
+  //   fsm.trigger(ERROR);
+  // }
+  // if (airPressureRear <= AIR_THRESHOLD_MIN) {
+  //   // TODO: Add Error code
+  //   if (LOG_STATE) {
+  //     Serial.print("Rear Air Pressure: ");
+  //     Serial.println(airPressureRear);
+  //   }
+  //   fsm.trigger(ERROR);
+  // }
+  // EStop Request
+  if (requestedState == REQ_ON) {
+    fsm.trigger(ERROR);
+  }
 }
 
 // Error
 void onEnterError() {
-  if (LOG_STATE) Serial.println("Watchdog Error");
+  if (LOG_STATE) Serial.println("Error or ESTOP");
+  digitalWrite(AS_close_SDC, LOW); // Open SDC
+  digitalWrite(EBS_enbl_rear, LOW); // Activate EBS
+  digitalWrite(EBS_enbl_front, LOW); // Activate EBS
 }
 
+void duringError() {
+  // if (requestedState == REQ_OFF) fsm.trigger(RESET);
+}
 
 // FSM Transitions Setup
 void setupFSM() {
@@ -460,11 +557,52 @@ void setupFSM() {
   // Check Watchdog Status
   fsm.add_transition(&stateCheckStatus, &stateTestWatchdog, TEST_HEARTBEAT, NULL);
   fsm.add_transition(&stateCheckStatus, &stateCloseSDC, CLOSE_SDC, NULL);
-  fsm.add_transition(&stateCheckStatus, &stateError, WD_ERROR, NULL);
+  fsm.add_transition(&stateCheckStatus, &stateError, ERROR, NULL);
 
   // Test Heartbeat
   fsm.add_transition(&stateTestWatchdog, &stateStartHeartbeat, START_HEARTBEAT, NULL);
- }
+ 
+  // EBS:
+  // Check Pressure
+  fsm.add_transition(&stateCloseSDC, &stateCheckPressure, CHECK_PRESSURE, NULL);
+  // Test Rear
+  fsm.add_transition(&stateCheckPressure, &stateDeactivateRear, DEACTIVATE_REAR, NULL);
+  fsm.add_transition(&stateDeactivateRear, &stateReactivateRear, REACTIVATE_REAR, NULL);
+  // Test Front
+  fsm.add_transition(&stateReactivateRear, &stateDeactivateFront, DEACTIVATE_FRONT, NULL);
+  fsm.add_transition(&stateDeactivateFront, &stateReactivateFront, REACTIVATE_FRONT, NULL);
+  // Continuous Monitoring
+  fsm.add_transition(&stateReactivateFront, &stateDeactivateEBS, DRIVING, NULL);
+  fsm.add_timed_transition(&stateDeactivateEBS, &stateMonitoring, 2000, NULL);
+  fsm.add_transition(&stateMonitoring, &stateError, ERROR, NULL);
+  // RESET
+  fsm.add_transition(&stateError, &stateCloseSDC, RESET, NULL);
+}
+
+void readVCU(const CAN_message_t &msg) {
+  if (msg.id == CAN_ID_VCU_STATUS) {
+    // TODO: add AS_SDC
+    EBS_Request NEW_STATE = static_cast<EBS_Request>(msg.buf[1] & 0x03);
+    if (NEW_STATE != requestedState) {
+      if (LOG_STATE) {
+        Serial.print("EBS Request: ");
+        Serial.println(NEW_STATE);
+      }
+      requestedState = NEW_STATE;
+    }
+  }
+}
+
+void updateBrakeStatus() {
+  if (ebsStatus == EBS_ERROR) return;
+
+  if ((brakePressureFront >= BRAKE_THRESHOLD_ENGAGED) ||
+      (brakePressureRear >= BRAKE_THRESHOLD_ENGAGED)) {
+    ebsStatus = EBS_ON;
+  } else {
+    ebsStatus = EBS_OFF;
+  }
+}
 
 // Setup
 void setup() {
@@ -498,10 +636,9 @@ void setup() {
   Can0.begin();
   Can0.setBaudRate(BAUD_RATE);
   Can0.setMaxMB(16);
-  // TODO: setup mailboxes
-  // Can0.enableMBInterrupts(); // enables all mailboxes to be interrupt enabled
-  // Can0.setMBFilter(MB0, APPS_ID);
-  // Can0.onReceive(MB0, appsCallback);
+  Can0.enableMBInterrupts(); // enables all mailboxes to be interrupt enabled
+  Can0.setMBFilter(MB0, CAN_ID_VCU_STATUS);
+  Can0.onReceive(MB0, readVCU);
   Can0.mailboxStatus();
 
   // Setup State Machine
@@ -510,6 +647,14 @@ void setup() {
 
 // Loop
 void loop() {
+  // Air Pressure
+  if (millis() - airLastSampleTime >= AIR_SAMPLE_INTERVAL) {
+    airLastSampleTime = millis();
+    readAir();
+    checkAirSCS();
+    calculateAirPressure();
+  }
+
   // Brake Pressure
   if (millis() - brakeLastSampleTime >= BRAKE_SAMPLE_INTERVAL) {
     brakeLastSampleTime = millis();
@@ -518,13 +663,24 @@ void loop() {
     calculateBrakePressure();
   }
 
-  // Air Pressure
-  if (millis() - airLastSampleTime >= AIR_SAMPLE_INTERVAL) {
-    airLastSampleTime = millis();
-    readAir();
-    checkAirSCS();
-    calculateAirPressure();
-  }
+  // AS-SDC Relay
+  sdcStatus = digitalRead(SDC_OUT_status);
+  // Update EBS Status
+  updateBrakeStatus();
+
+  // On VCU
+  // 1. get to AI mode
+  // 2. wait for brakes engaged
+  // 3. Send REQ_TEST
+  // 4. Test the EBS works
+  // 5. Respond with Test complete flag
+  // 6. Enter AS_READY
+  // 7. Send REQ_OFF
+  // 8. Enter AS_DRIVING
+
+  // TODO: add timeouts for error
+  // TODO: ADD timeout for ESTOP
+  // TODO: get back to test again
 
   // Send CAN messages
   processCAN();
